@@ -188,7 +188,7 @@ COPY --from=rust-tree --chown=0:0 /usr/local/cargo /usr/local/cargo
 RUN apt-get update && apt-get install -y --no-install-recommends cmake unzip \
  && rm -rf /var/lib/apt/lists/*
 # renovate: datasource=github-releases depName=protocolbuffers/protobuf extractVersion=^v(?<version>.+)$
-ARG PROTOC_VERSION=35.1
+ARG PROTOC_VERSION=36.2
 # renovate: datasource=github-releases depName=nextest-rs/nextest extractVersion=^cargo-nextest-(?<version>.+)$
 ARG NEXTEST_VERSION=0.9.151
 ARG TARGETARCH \
