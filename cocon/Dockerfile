@@ -29,7 +29,7 @@ RUN export CGO_ENABLED=0 GOBIN=/out \
 # The global npm tools, every transitive version from the kit's lockfile (npm-tools/, which Renovate's
 # npm manager updates). Install scripts run only for the manifest's allowScripts; the check catches
 # a postinstall that left Claude Code's stub in place.
-FROM node:26.13.0-bookworm@sha256:a546d3f8acd2af4382668a7e6acd3bc4418e6a27478373e3246f8162f5181509 AS npm-tools
+FROM node:26.13.1-bookworm@sha256:b7087bc4d973034b30854b378ba107f9fab622b47514cb7e2592e41b8bab8d49 AS npm-tools
 WORKDIR /npm-tools
 COPY npm-tools/package.json npm-tools/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund \
@@ -37,7 +37,7 @@ RUN npm ci --ignore-scripts --no-audit --no-fund \
  && v="$(node -p 'require("./package-lock.json").packages["node_modules/@anthropic-ai/claude-code"].version')" \
  && node_modules/.bin/claude --version | grep -qxF "$v (Claude Code)"
 
-FROM node:26.13.0-bookworm@sha256:a546d3f8acd2af4382668a7e6acd3bc4418e6a27478373e3246f8162f5181509 AS base
+FROM node:26.13.1-bookworm@sha256:b7087bc4d973034b30854b378ba107f9fab622b47514cb7e2592e41b8bab8d49 AS base
 
 # --- System toolchain: build basics and core utils --------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
