@@ -27,6 +27,8 @@ jobs:
           mkdir "$RUNNER_TEMP/shellcheck"
           tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP/shellcheck" --strip-components=1
           echo "$RUNNER_TEMP/shellcheck" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with: { go-version: 1.27.4, cache: false }  # macos-26 has no go; the image's go-src version
       - name: actionlint, at the image's version  # check.sh skips it when missing; the go checksum database verifies it
         run: |
           v="$(sed -n 's/^ARG ACTIONLINT_VERSION=//p' cocon/Dockerfile)"

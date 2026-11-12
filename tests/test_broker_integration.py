@@ -330,8 +330,8 @@ class BrokerOnDocker(unittest.TestCase):
         self.assertEqual(r.returncode, 0, f"the broker can't reach egress: {r.stderr}")  # the check above means something
 
     def test_dev_cant_resolve_outside_names_only_the_broker(self):
-        def lookup(net, host):
-            return sh("docker", "run", "--rm", "--network", f"{P}_{net}", IMG, "nslookup", host).returncode == 0
+        def lookup(net, host):  # fully qualified: busybox gives up on the first search domain's SERVFAIL (CI's runners)
+            return sh("docker", "run", "--rm", "--network", f"{P}_{net}", IMG, "nslookup", f"{host}.").returncode == 0
         internal = sh("docker", "network", "inspect", "-f", "{{.Internal}}", f"{P}_internal").stdout.strip()
         self.assertEqual(internal, "true", f"{P}_internal is not internal")
         if not lookup("outside", "example.com"):  # api.github.com resolves there by the fake upstream's alias
