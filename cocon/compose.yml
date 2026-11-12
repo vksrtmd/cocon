@@ -119,7 +119,7 @@ services:
   # and removes it after.
   ports:
     profiles: [ports]
-    image: alpine/socat:1.8.1.3@sha256:603174b77eebaba25ba8f8ebb15e1234d6600409554e95d6fb203fd106150287
+    image: alpine/socat:1.8.1.3@sha256:e8a6e8868a8e6e01d9c2c321a8f8d4474d2d741d962462e5c5a124a8e66a0055
     entrypoint: [sh, -c, 't=$$1; shift; for p; do socat TCP-LISTEN:$$p,fork,reuseaddr TCP:$$t:$$p & done; wait', ports]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -128,7 +128,7 @@ services:
   # --- Optional services, one profile per extra. Pin tags to your production versions.
   postgres:
     profiles: [postgres]
-    image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+    image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
     environment:
       POSTGRES_USER: dev
       POSTGRES_PASSWORD: dev
