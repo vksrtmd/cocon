@@ -1,0 +1,55 @@
+# On PRs touching shell or workflows: shellcheck, and the tests on stock macOS bash 3.2 + BSD userland; on Linux the
+# tests that need a Docker daemon (compose.yml, the credential broker), which macOS runners skip.
+name: shell
+on:
+  pull_request:
+    paths: ["cocon/**", "tests/**", ".github/**"]  # .github: a runner label bump must meet actionlint here
+permissions: { contents: read }  # a PR's code runs here: its token can't write
+
+jobs:
+  check:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { persist-credentials: false }  # tests can't read the token from git config
+      - name: shellcheck, pinned and checked against its sha256
+        env:
+          # Bumped by hand, the version and its sha256 together: Renovate reads no version comment
+          # in workflows and can't update the sum. The sum for <version>:
+          SHELLCHECK_VERSION: v0.11.0
+          # gh api repos/koalaman/shellcheck/releases/tags/<version> \
+          #   --jq '.assets[] | select(.name | endswith("darwin.aarch64.tar.gz")) | .digest'
+          SHELLCHECK_SHA256: 339b930feb1ea764467013cc1f72d09cd6b869ebf1013296ba9055ab2ffbd26f
+        run: |
+          f="shellcheck-$SHELLCHECK_VERSION.darwin.aarch64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$f" "https://github.com/koalaman/shellcheck/releases/download/$SHELLCHECK_VERSION/$f"
+          echo "$SHELLCHECK_SHA256  $RUNNER_TEMP/$f" | shasum -a 256 -c -
+          mkdir "$RUNNER_TEMP/shellcheck"
+          tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP/shellcheck" --strip-components=1
+          echo "$RUNNER_TEMP/shellcheck" >> "$GITHUB_PATH"
+      - name: actionlint, at the image's version  # check.sh skips it when missing; the go checksum database verifies it
+        run: |
+          v="$(sed -n 's/^ARG ACTIONLINT_VERSION=//p' cocon/Dockerfile)"
+          [[ -n $v ]] || { echo "no ARG ACTIONLINT_VERSION in cocon/Dockerfile"; exit 1; }
+          GOBIN="$RUNNER_TEMP/actionlint" go install "github.com/rhysd/actionlint/cmd/actionlint@$v"
+          echo "$RUNNER_TEMP/actionlint" >> "$GITHUB_PATH"
+      - run: /bin/bash tests/check.sh
+
+  docker:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { persist-credentials: false }  # tests can't read the token from git config
+      - name: pull the images the tests skip without  # a skip fails the next step; tests/test_compose.py checks the list
+        run: |
+          for s in broker docker ports; do
+            docker pull "$(awk -v s="$s" '$0 == "  " s ":" {f=1} f && $1 == "image:" {print $2; exit}' cocon/compose.yml)"
+          done
+      - name: let the rootless sidecar create user namespaces  # Ubuntu's AppArmor can refuse them even to unconfined processes
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: tests that need a Docker daemon  # a skipped one fails here: the runner has Docker
+        run: |
+          set -o pipefail  # the default shell has none: a failing run must fail the step
+          python3 -I -B -m unittest discover -s tests -p 'test_*_integration.py' -v 2>&1 | tee /tmp/out
+          ! grep -q ' skipped' /tmp/out

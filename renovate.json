@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "customManagers:dockerfileVersions",
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "schedule": ["before 6am on monday"],
+  "ignoreDeps": ["cocon"],
+  "packageRules": [
+    {
+      "description": "Wait before proposing a release, so most malicious ones are yanked before they reach a PR",
+      "matchDatasources": ["npm", "github-releases", "github-tags", "go", "docker"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "One PR for pin and digest bumps, except the credential broker's (holds the real tokens) and the egress proxy's images: each of their bumps, digests too, gets its own PR",
+      "matchUpdateTypes": ["pin", "pinDigest", "digest"],
+      "matchPackageNames": ["!mitmproxy/mitmproxy", "!ubuntu/squid"],
+      "groupName": "digests"
+    },
+    {
+      "description": "Majors need a data migration; move with production instead",
+      "matchPackageNames": ["postgres"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
+  ]
+}

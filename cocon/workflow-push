@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# workflow-push: on the host, commit a session's workflow patch onto its pushed branch and push it: workflow-push NAME.
+# Usage and code: cocon/py/kit/workflowpush/cli.py (ADR 0013); this shim only finds python3.
+kit="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)" || exit 1
+command -v python3 >/dev/null || { echo "workflow-push: needs python3; run: xcode-select --install" >&2; exit 1; }
+exec python3 -I -B "$kit/py" workflow-push "$@"

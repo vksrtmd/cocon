@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Stub tmux for the Python tests (tests/harness.py). No server needed.
+# Every call appends one JSON line to $STUB_LOG: {"cmd":"tmux","args":[...],"env":{}}.
+#   STUB_SESSIONS  sessions that exist (`has-session -t =NAME` succeeds); STUB_PANES: `list-panes` output
+#   STUB_DEAD      sessions whose pane is dead (`display-message` prints 1 for #{pane_dead})
+set -u
+
+self="$0"; [[ -L $self ]] && self="$(readlink "$self")"  # tests may symlink the stubs
+# shellcheck source=/dev/null  # the path is dynamic; stub.sh is not a script of its own
+. "$(dirname "$self")/../stub.sh"
+record tmux "" "$@"
+
+case "${1-}" in
+  has-session) [[ " ${STUB_SESSIONS:-} " == *" ${3#=} "* ]] ;;
+  display-message) [[ " ${STUB_DEAD:-} " == *" ${4#=} "* ]] && echo 1 || echo 0 ;;
+  list-panes) [[ -z ${STUB_PANES:-} ]] || printf '%s\n' "$STUB_PANES" ;;
+esac

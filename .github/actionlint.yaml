@@ -1,0 +1,4 @@
+# Runner labels newer than the actionlint some installs carry (the cocoon's 1.7.12 predates ubuntu-26.04).
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

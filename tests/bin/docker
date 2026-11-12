@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Stub docker for the Python tests (tests/harness.py). No daemon needed.
+# Every call appends one JSON line to $STUB_LOG: {"cmd":"docker","args":[...],"env":{...}}.
+# "env" holds the variables of the call's environment named in RECORDED; add a name there to record it.
+# Behaviour is steered by the STUB_* variables below; a test sets them via run_kit(env=...).
+#   STUB          shell snippet run as the session by `run`; STUB_RC its exit code (default 0)
+#   STUB_EGRESS_UP   set: `ps -q egress` finds the proxy
+#   STUB_DOCKER_DOWN set: `docker info` fails; STUB_INFO: what `docker info --format` prints
+#   STUB_SIDECAR_RC  the Docker sidecar's `compose ... up` exits with this (default 0)
+#   STUB_NOIMG    images that don't exist (`image inspect` fails); STUB_TAGS: `image ls` output
+#   STUB_VOLUMES  volumes that exist, also listed by `volume ls --filter name=RE`; STUB_PROJECTS: `compose ls -q` output
+#   STUB_RUNNING  P=svc,svc ... services running in compose project P
+#   STUB_PORTS    P=HOST>COCOON,... forwarders published by project P; STUB_PORTS_ERR: the forwarder's
+#                 `run` fails with this message
+#   STUB_FWDS     leftover forwarders and STUB_BROKERS leftover brokers: `ps -a --filter name=RE` lists those
+#                 matching RE; STUB_PS_FAIL: `ps -a` fails; STUB_RM_FAIL: `rm` fails
+#   STUB_BROKER_RC  the broker's `run` exits with this (default 0)
+#   STUB_SIDECAR_PIDS  CUR,MAX: the Docker sidecar runs, with these pids.current and pids.max
+#   STUB_FAIL     a call whose args start with these words (e.g. "volume ls") fails
+#   STUB_COMPOSE_VERSION  what `compose version --short` prints (default 2.29.7)
+#   STUB_UNHEALTHY   containers whose `inspect -f {{.State.Health.Status}}` prints unhealthy (others: healthy)
+# shellcheck disable=SC2013,SC2086  # the STUB_* lists are space-separated words on purpose
+set -u
+
+RECORDED='^(COCON_TAG|WITH_[A-Z0-9_]*|REPO_VOLUMES|REPO_ALLOW|ALLOW_DIR|LOG_DIR|LOG_NAME|GH_TOKEN|CLAUDE_CODE_OAUTH_TOKEN)$'  # the tokens: what the broker would get
+
+self="$0"; [[ -L $self ]] && self="$(readlink "$self")"  # tests may symlink the stubs
+# shellcheck source=/dev/null  # the path is dynamic; stub.sh is not a script of its own
+. "$(dirname "$self")/../stub.sh"
+record docker "$RECORDED" "$@"
+[[ -n ${STUB_FAIL:-} && "$* " == "$STUB_FAIL "* ]] && { echo "docker stub: $STUB_FAIL failed" >&2; exit 1; }
+
+# A compose run must name a service of the compose file, so a service missing from it fails the tests.
+if [[ "${1-} ${2-}" == "compose -f" && " $* " == *" run "* ]]; then
+  after=" ${*#* run } " found=0
+  for s in $(awk '/^services:/ { s = 1; next } /^[^ #]/ { s = 0 }
+                  s && /^  [a-z][a-z0-9_-]*:/ { sub(/^  /, ""); sub(/:.*/, ""); print }' "$3"); do
+    [[ "$after" != *" $s "* ]] || found=1
+  done
+  [[ $found == 1 ]] || { echo "docker stub: compose run names no service of $3: $*" >&2; exit 97; }
+fi
+# Compose interpolates the whole file for a command on it: one with a ${VAR:?...} unset or empty fails, as compose's does.
+if [[ "${1-} ${2-}" == "compose -f" ]]; then
+  # shellcheck disable=SC2016  # a literal ${, the pattern
+  for v in $(grep -o '\${[A-Za-z_][A-Za-z0-9_]*:?' "$3" | sed 's/^\${//; s/:?$//' | sort -u); do
+    [[ -n ${!v:-} ]] || { echo "docker stub: required variable $v is missing a value: $*" >&2; exit 98; }
+  done
+fi
+# Egress runs when $STUB_EGRESS_UP is set; `squid -k rotate` reopens (creates) the project's log, as squid does.
+[[ " $* " == *" ps -q egress "* ]] && { [[ -z ${STUB_EGRESS_UP:-} ]] || echo id; exit 0; }
+[[ " $* " == *" -k rotate "* ]] && { p="$*"; p="${p#* -p cocon-}"; : >>"$LOG_DIR/${p%% *}.log"; exit 0; }
+[[ -n ${STUB_DOCKER_DOWN:-} && ${1-} == info ]] && exit 1
+if [[ ${1-} == inspect && "$*" == *.State.Health.Status* ]]; then
+  if [[ " ${STUB_UNHEALTHY:-} " == *" ${*: -1} "* ]]; then echo unhealthy; else echo healthy; fi; exit 0
+fi
+[[ "$*" == "compose version --short" ]] && { echo "${STUB_COMPOSE_VERSION:-2.29.7}"; exit 0; }
+[[ ${1-} == info && -n ${STUB_INFO:-} ]] && { echo "$STUB_INFO"; exit 0; }
+[[ ${1-} == compose && " $* " == *" up "* ]] && exit "${STUB_SIDECAR_RC:-0}"
+[[ "${1-} ${2-}" == "image inspect" && " ${STUB_NOIMG:-} " == *" ${3-} "* ]] && exit 1
+[[ "${1-} ${2-}" == "image ls" ]] && { printf '%s\n' ${STUB_TAGS:-}; exit 0; }
+if [[ "${1-} ${2-}" == "volume inspect" ]]; then
+  [[ " ${STUB_VOLUMES:-} " == *" ${3-} "* ]]; exit
+fi
+[[ "${1-} ${2-}" == "compose ls" ]] && { printf '%s\n' ${STUB_PROJECTS:-}; exit; }
+# --ls: project P's forwarder is P-ports-1, publishing $STUB_PORTS (P=HOST>COCOON,...); `port` prints them.
+if [[ "${1-}" == ps && "$*" == *com.docker.compose.service=ports* ]]; then
+  for p in ${STUB_PORTS:-}; do [[ ${p%%=*} != "${3#label=com.docker.compose.project=}" ]] || echo "${p%%=*}-ports-1"; done
+  exit 0
+fi
+if [[ "${1-}" == port ]]; then
+  for p in ${STUB_PORTS:-}; do
+    [[ "${p%%=*}-ports-1" != "$2" ]] || echo "${p#*=}" | tr , '\n' | sed -E 's#([0-9]+)>([0-9]+)#\2/tcp -> 127.0.0.1:\1#'
+  done; exit 0
+fi
+[[ "${1-} ${2-}" == "ps -a" && -n ${STUB_PS_FAIL:-} ]] && exit 1
+[[ ${1-} == rm && -n ${STUB_RM_FAIL:-} ]] && exit 1
+[[ "${1-} ${2-}" == "ps -a" ]] && { printf '%s\n' ${STUB_FWDS:-} ${STUB_BROKERS:-} | grep -E "${4#name=}"; exit 0; }
+[[ "${1-} ${2-}" == "volume ls" ]] && { printf '%s\n' ${STUB_VOLUMES:-} | grep -E "${5#name=}"; exit 0; }
+if [[ "${1-} ${2-}" == "ps --filter" ]]; then
+  for p in ${STUB_RUNNING:-}; do
+    [[ ${p%%=*} == "${3#label=com.docker.compose.project=}" ]] && echo "${p#*=}" | tr , '\n'
+  done; exit 0
+fi
+# `exec <sidecar> cat .../pids.current .../pids.max`: prints $STUB_SIDECAR_PIDS (current,max); fails without it.
+if [[ ${1-} == exec && ${3-} == cat ]]; then [[ -n ${STUB_SIDECAR_PIDS:-} ]] || exit 1; echo "${STUB_SIDECAR_PIDS/,/$'\n'}"; exit 0; fi
+for a; do
+  if [[ $a == broker ]]; then exit "${STUB_BROKER_RC:-0}"; fi
+done
+for a; do
+  if [[ $a == ports ]]; then
+    [[ -z ${STUB_PORTS_ERR:-} ]] || { echo "$STUB_PORTS_ERR" >&2; exit 1; }; exit 0
+  fi
+done
+for a; do
+  if [[ $a == run ]]; then eval "${STUB:-true}"; exit "${STUB_RC:-0}"; fi
+done
+exit 0

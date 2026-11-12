@@ -1,0 +1,241 @@
+# cocon: Claude Code in a container with an allowlisting egress proxy.
+# Launched via ./cocon (sets project name, workspace mount, token, flags).
+# Extras are opt-in: `cocon --with postgres,docker,...`. Each sidecar below is a profile named
+# after its extra; the image's tools come from build args (WITH_<NAME>=1, see the Dockerfile).
+
+services:
+  dev:
+    build:
+      context: .
+      args:   # unset: the Dockerfile's default (no extra)
+        - WITH_CLICKHOUSE
+        - WITH_DOCKER
+        - WITH_GO
+        - WITH_HELM
+        - WITH_KAFKA
+        - WITH_PLAYWRIGHT
+        - WITH_POSTGRES
+        - WITH_PYTHON
+        - WITH_RUST
+        - WITH_TAURI
+    image: cocon:${COCON_TAG:-latest}   # the extras' names, sorted, joined by -
+    init: true
+    # The session runs as `claude` with no capabilities; keep it that way (no setuid
+    # escalation) and cap what a runaway build can take from the Docker VM.
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: ${COCON_MEMORY:-8g}
+    pids_limit: ${COCON_PIDS:-4096}
+    environment:   # the proxy variables come from ./cocon: the session's broker (ADR 0014), its only way out
+      NO_PROXY: localhost,127.0.0.1,postgres,clickhouse,kafka,docker
+      no_proxy: localhost,127.0.0.1,postgres,clickhouse,kafka,docker
+      NODE_USE_ENV_PROXY: "1"   # Node's fetch and http ignore the proxy variables without it (corepack's yarn/pnpm downloads)
+      # No install scripts, no versions younger than a day, exact versions saved.
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+      NPM_CONFIG_MIN_RELEASE_AGE: "1"
+      NPM_CONFIG_SAVE_EXACT: "true"
+    volumes:
+      - claude-config:/home/claude/.claude      # auth, plugins, history (per repo)
+      - cache:/home/claude/.cache               # go-build, ms-playwright, ...
+      - npm:/home/claude/.npm
+    networks: [internal]
+    depends_on:
+      egress:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+        required: false
+      clickhouse:
+        condition: service_healthy
+        required: false
+      kafka:
+        condition: service_started
+        required: false
+      docker:
+        condition: service_healthy
+        required: false
+
+  egress:
+    image: ubuntu/squid:6.6-24.04_edge@sha256:8a3baed477e2c282ab8aa5edad442f69873246964f225c5c2ae8364b6610963c
+    # Mount the directory, not single files: editors and git replace a file by
+    # renaming over it, which leaves a single-file mount on the old, deleted inode.
+    # This repo's own hosts: ALLOW_DIR/REPO_ALLOW (set by ./cocon), linked to the
+    # name squid.conf reads; /dev/null (no hosts) for a repo without a GitHub origin.
+    # The audit log, likewise: LOG_DIR/LOG_NAME on the host, mounted here and nowhere else (ADR 0012).
+    entrypoint:
+      - sh
+      - -c
+      - set -e; f=/dev/null; [ -z "$$REPO_ALLOW" ] || f="/etc/squid/allow/$$REPO_ALLOW";
+        ln -sf "$$f" /etc/squid/repo-allowlist.txt;
+        ln -sf "/var/log/squid/cocon/$$LOG_NAME" /var/log/squid/audit.log; exec entrypoint.sh "$$@"
+      - egress
+    command: [-f, /etc/squid/cocon/squid.conf, -NYC]
+    environment:
+      REPO_ALLOW: ${REPO_ALLOW:-}
+      LOG_NAME: ${LOG_NAME:?set by cocon}
+    volumes:
+      - ./squid:/etc/squid/cocon:ro
+      - ${ALLOW_DIR:-~/.config/cocon/allow}:/etc/squid/allow:ro
+      - ${LOG_DIR:?set by cocon}:/var/log/squid/cocon
+    # Not on internal: only the broker reaches it. squid.conf listens on the squid-in alias, its address on
+    # broker-egress, so nothing on outside can connect either.
+    networks:
+      broker-egress: { aliases: [squid-in] }
+      outside: {}
+    restart: unless-stopped
+
+  # --- Credential broker (ADR 0014): between dev and egress, holding the session's real tokens; dev gets
+  # placeholders and the broker as its proxy. ./cocon runs one per session, named after it, with the tokens
+  # in its environment and two volumes of its own: the CA (key) at /ca, only here, and its cert at /pub for dev.
+  broker:
+    image: mitmproxy/mitmproxy:12.3.1@sha256:2711066c855659b5af8b1dbb84494ed3eff69b42ece439c60b4fe09a2db829d4
+    # Not the image's entrypoint: it needs capabilities to drop to its user. Root without any instead.
+    entrypoint: [sh, /opt/broker/run.sh]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      LOG_NAME: ${LOG_NAME:?set by cocon}
+    volumes:
+      - ./broker:/opt/broker:ro
+      # Its own audit lines, in a subdir of LOG_DIR: never squid's files (ADR 0012).
+      - ${LOG_DIR:?set by cocon}/broker:/var/log/broker
+    networks: [internal, broker-egress]
+    # compose run, how the broker starts, ignores this: ./cocon sets the policy on the container itself.
+    restart: on-failure
+
+  # --- The Docker sidecar's own broker (profile "docker"): the sidecar outlives sessions, and sessions run side by
+  # side, so it can't use theirs. It holds no token. Its CA key lives in memory only, a new one each start; its cert
+  # goes to docker-ca, the sidecar's to trust (ADR 0014).
+  docker-broker:
+    extends: broker
+    profiles: [docker]
+    tmpfs: [/ca]
+    volumes: [docker-ca:/pub]
+
+  # --- Forwarder for `cocon --port` (profile "ports"): publishes the given ports on
+  # the Mac's 127.0.0.1 and forwards each to the session's container (first arg). dev stays
+  # internal-only: Docker drops ports published by an internal-only container, and a second
+  # network would give dev a route around the proxy. ./cocon starts it with the session
+  # and removes it after.
+  ports:
+    profiles: [ports]
+    image: alpine/socat:1.8.1.3@sha256:603174b77eebaba25ba8f8ebb15e1234d6600409554e95d6fb203fd106150287
+    entrypoint: [sh, -c, 't=$$1; shift; for p; do socat TCP-LISTEN:$$p,fork,reuseaddr TCP:$$t:$$p & done; wait', ports]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [internal, outside]
+
+  # --- Optional services, one profile per extra. Pin tags to your production versions.
+  postgres:
+    profiles: [postgres]
+    image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: dev
+    volumes: [pgdata:/var/lib/postgresql]   # 18+: data lives in a per-major subdirectory
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev"]
+      interval: 2s
+      retries: 30
+    networks: [internal]
+
+  clickhouse:
+    profiles: [clickhouse]
+    image: clickhouse/clickhouse-server:26.10.3.7@sha256:739e099abd1157390960a59e4532d21781d8fde57e6e4151cb920ea02c30b1ce
+    environment:
+      CLICKHOUSE_USER: dev
+      CLICKHOUSE_PASSWORD: dev
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    volumes: [chdata:/var/lib/clickhouse]
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user", "dev", "--password", "dev", "-q", "SELECT 1"]
+      interval: 2s
+      retries: 30
+    networks: [internal]
+
+  kafka:
+    profiles: [kafka]
+    image: apache/kafka:4.4.0@sha256:833b867a9585a141da455dc2b57431c65cbccb27f11c91f694444cca9f777e0f
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    networks: [internal]
+
+  # --- Optional Docker daemon (profile "docker"), rootless and unprivileged (ADR 0016): dockerd runs as the image's
+  # user in a user namespace, in a container that gets none of the Docker VM's devices, so neither the daemon nor
+  # anything it starts reaches the VM's disks. Never make it privileged or swap in the rootful image where it can't
+  # start: ./cocon refuses instead. No host Docker socket is involved.
+  # Pulls go through its own broker (docker-broker), which decrypts Docker Hub's registry and auth hosts to refuse
+  # pushes, so the daemon trusts that broker's CA there: certs.d (docker.io for containerd's resolver,
+  # registry-1.docker.io for the classic one; under $HOME for a rootless daemon) links to the cert, which the daemon
+  # reads per request, so a restarted broker's new CA is trusted at once.
+  docker:
+    profiles: [docker]
+    image: docker:29.9.3-dind-rootless@sha256:e3d0fa70055956693134873845b743bbe35b5199c68a52347032ae3e5dbac9a0
+    # What rootlesskit needs instead of privileged: unshare and mount (seccomp, and AppArmor where the host has
+    # it), /proc and /sys unmasked for its containers' own mounts, and a tap device for slirp4netns.
+    security_opt: [seccomp=unconfined, apparmor=unconfined, systempaths=unconfined]
+    devices: [/dev/net/tun]
+    # The session's caps, for the daemon and every container it starts: rootless has no cgroup driver, so these
+    # are the only ones (a nested --memory or --pids-limit is ignored).
+    mem_limit: ${COCON_MEMORY:-8g}
+    pids_limit: ${COCON_PIDS:-4096}
+    # rootlesskit, PID 1 otherwise, doesn't reap: each exited container's shim would stay a zombie against pids_limit.
+    init: true
+    entrypoint:
+      - sh
+      - -c
+      - |
+        for h in docker.io registry-1.docker.io; do
+          d="$$HOME/.config/docker/certs.d/$$h"
+          mkdir -p "$$d" && ln -sf /broker-ca/ca.pem "$$d/ca.crt"
+        done
+        exec dockerd-entrypoint.sh "$$@"
+      - docker
+    environment:
+      # Plain TCP on 2375, reachable only on the internal network. Docker warns it will want this made explicit
+      # (--tls=false) in a later release: check on the next major bump.
+      DOCKER_TLS_CERTDIR: ""
+      DOCKER_HOST: tcp://127.0.0.1:2375   # for the healthcheck and `docker exec`: the socket is under /run/user
+      HTTPS_PROXY: http://docker-broker:8080
+      HTTP_PROXY: http://docker-broker:8080
+      NO_PROXY: localhost,127.0.0.1
+    volumes:
+      - dockerdata-rootless:/home/rootless/.local/share/docker
+      - docker-ca:/broker-ca:ro
+      # `docker run -v` paths resolve on the daemon: ./cocon's override adds the session's checkout mounts,
+      # at the same paths and modes.
+    depends_on: [docker-broker]
+    healthcheck:
+      test: ["CMD-SHELL", "docker info && test -s /broker-ca/ca.pem"]
+      interval: 2s
+      retries: 30
+    networks: [internal]
+
+networks:
+  internal:
+    internal: true      # no route to the internet; the broker is the way out
+  broker-egress:
+    internal: true      # the broker and egress alone
+  outside: {}
+
+volumes:              # per repo, shared by its worktrees: created by ./cocon, so no project owns them
+  claude-config: { name: "${REPO_VOLUMES:?set by cocon}-config", external: true }
+  cache:         { name: "${REPO_VOLUMES:?set by cocon}-cache", external: true }
+  npm:           { name: "${REPO_VOLUMES:?set by cocon}-npm", external: true }
+  pgdata: {}            # per project
+  chdata: {}            # per project
+  dockerdata-rootless: {}   # per project: two daemons must not share a data dir
+  docker-ca: {}         # per project: the cert of the Docker sidecar's broker

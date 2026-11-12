@@ -1,0 +1,45 @@
+# On every PR: if cocon/ changed, build the image the way `cocon --build` does, check its
+# tools start, and pull the service images. No path filter on the trigger, so the check always
+# reports and can be required on main; PRs without cocon/ changes pass in seconds.
+name: cocon
+on: pull_request
+permissions: { contents: read }  # a PR's code runs here: its token can't write
+
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { fetch-depth: 0, persist-credentials: false }  # the diff below reads only local refs
+      - name: compose's variables  # tests/ci.vars, so a new one needs no workflow change
+        run: grep -v '^#' tests/ci.vars >> "$GITHUB_ENV"
+      - id: changed
+        env: { BASE: "${{ github.base_ref }}" }
+        run: |
+          git diff --quiet "origin/$BASE...HEAD" -- cocon tests/ci.vars .github/workflows/cocon.yml || echo cocon=1 >> "$GITHUB_OUTPUT"
+          git diff --quiet "origin/$BASE...HEAD" -- cocon/Dockerfile cocon/npm-tools cocon/cargo.sh || echo dockerfile=1 >> "$GITHUB_OUTPUT"
+          git diff --quiet "origin/$BASE...HEAD" -- cocon/compose.yml tests/ci.vars .github/workflows/cocon.yml || echo compose=1 >> "$GITHUB_OUTPUT"
+      - name: compose callers set its variables
+        if: steps.changed.outputs.cocon
+        run: python3 -I -m unittest discover -s tests -p test_compose.py
+      - if: steps.changed.outputs.cocon
+        run: docker compose -f cocon/compose.yml build dev
+      - name: tools start
+        if: steps.changed.outputs.cocon
+        run: |
+          docker run --rm --entrypoint sh cocon:latest -c \
+            'claude --version && actionlint --version && gh --version'
+      - name: extras tools start
+        if: steps.changed.outputs.dockerfile
+        run: |
+          COCON_TAG=all WITH_CLICKHOUSE=1 WITH_DOCKER=1 WITH_GO=1 WITH_HELM=1 WITH_KAFKA=1 \
+            WITH_PLAYWRIGHT=1 WITH_POSTGRES=1 WITH_PYTHON=1 WITH_RUST=1 WITH_TAURI=1 docker compose -f cocon/compose.yml build dev
+          docker run --rm --entrypoint bash cocon:all -c \
+            'psql --version && kcat -V && clickhouse-client --version && docker --version && uv --version \
+              && cargo --version && cmake --version && go version && gopls version && helm version \
+              && protoc --version && test -f /usr/local/include/google/protobuf/timestamp.proto && cargo nextest --version \
+              && test "$(command -v cargo)" = /usr/local/lib/cocon/cargo/cargo \
+              && pkg-config --exists webkit2gtk-4.1 gtk+-3.0 libsoup-3.0 javascriptcoregtk-4.1 librsvg-2.0'
+      - name: service images pull
+        if: steps.changed.outputs.compose
+        run: docker compose -f cocon/compose.yml --profile '*' pull --ignore-buildable

@@ -1,0 +1,23 @@
+{
+  "name": "cocon-npm-tools",
+  "private": true,
+  "//": [
+    "The image's global npm tools (cocon/Dockerfile, stage npm-tools): npm ci from this lockfile,",
+    "install scripts off. Renovate bumps the versions and the lockfile. playwright is for the",
+    "playwright extra's install-deps step and stays off PATH. corepack: Node 25+ dropped the bundled one.",
+    "allowScripts: the only packages whose install scripts the build runs (npm rebuild in the",
+    "Dockerfile names the same ones). @anthropic-ai/claude-code: its postinstall (install.cjs)",
+    "links the platform package's native binary over the bin/claude.exe stub; it runs nothing",
+    "else and fetches nothing."
+  ],
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.318",
+    "corepack": "0.36.0",
+    "playwright": "1.65.0",
+    "typescript": "7.0.2",
+    "typescript-language-server": "6.0.3"
+  },
+  "allowScripts": {
+    "@anthropic-ai/claude-code": true
+  }
+}

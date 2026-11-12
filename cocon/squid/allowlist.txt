@@ -1,0 +1,40 @@
+# One domain per line. A leading dot matches the domain and all subdomains.
+# Apply changes with:  cocon --reload-proxy
+# Find what was blocked: cocon --proxy-log   (look for TCP_DENIED)
+
+# Claude Code: inference
+api.anthropic.com
+
+# GitHub: gh CLI, git over HTTPS, plugin marketplaces, Actions logs (gh run view --log-failed)
+github.com
+api.github.com
+codeload.github.com
+objects.githubusercontent.com
+raw.githubusercontent.com
+results-receiver.actions.githubusercontent.com
+
+# Go modules. proxy.golang.org redirects large module zips to its Google Cloud Storage bucket; the broker
+# decrypts storage.googleapis.com and passes only reads of that bucket, since anyone can write a bucket of their own.
+proxy.golang.org
+sum.golang.org
+storage.googleapis.com
+
+# npm
+registry.npmjs.org
+
+# Rust crates (--with rust): cargo's sparse index and crate downloads. Not crates.io itself, the API
+# `cargo publish` and `cargo search` use.
+index.crates.io
+static.crates.io
+
+# PyPI (--with python): pip's and uv's index and downloads. Not upload.pypi.org.
+pypi.org
+files.pythonhosted.org
+
+# Docker Hub image pulls (only used with --with docker)
+registry-1.docker.io
+auth.docker.io
+production.cloudflare.docker.com
+production.cloudfront.docker.com
+
+# Add project-specific hosts below (private registries, remote MCP servers, ...)

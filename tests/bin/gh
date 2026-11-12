@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Stub gh for the Python tests (tests/harness.py). Appends {"cmd":"gh","args":[...],"env":{...}} to $STUB_LOG,
+# with GH_TOKEN, GH_HOST and PWD (the dir gh ran in) in "env".
+# `repo view` prints $STUB_DEFAULT_BRANCH (default main).
+# `api` prints the repos in $STUB_GH_REPOS (space-separated owner/name, or owner/name:private for a private one),
+# one owner/name per line, only the private ones when the path asks visibility=private; or it fails when
+# $STUB_GH_API_FAIL is set.
+# Every other call succeeds.
+set -u
+self="$0"; [[ -L $self ]] && self="$(readlink "$self")"  # tests may symlink the stubs
+# shellcheck source=/dev/null  # the path is dynamic; stub.sh is not a script of its own
+. "$(dirname "$self")/../stub.sh"
+export PWD
+record gh '^(GH_TOKEN|GH_HOST|PWD)$' "$@"
+if [[ "${1-} ${2-}" == "repo view" ]]; then echo "${STUB_DEFAULT_BRANCH-main}"; exit 0; fi
+if [[ "${1-}" == api ]]; then
+  [[ -z ${STUB_GH_API_FAIL:-} ]] || { echo "gh stub: HTTP 403: API rate limit exceeded" >&2; exit 1; }
+  for r in ${STUB_GH_REPOS-}; do [[ "${2-}" != *visibility=private* || $r == *:private ]] && echo "${r%:private}"; done
+  exit 0
+fi
