@@ -188,12 +188,12 @@ COPY --from=rust-tree --chown=0:0 /usr/local/cargo /usr/local/cargo
 RUN apt-get update && apt-get install -y --no-install-recommends cmake unzip \
  && rm -rf /var/lib/apt/lists/*
 # renovate: datasource=github-releases depName=protocolbuffers/protobuf extractVersion=^v(?<version>.+)$
-ARG PROTOC_VERSION=35.1
+ARG PROTOC_VERSION=36.2
 # renovate: datasource=github-releases depName=nextest-rs/nextest extractVersion=^cargo-nextest-(?<version>.+)$
 ARG NEXTEST_VERSION=0.9.151
 ARG TARGETARCH \
-    PROTOC_SHA256_AMD64=6930ebf62bd4ea607b98fff052596c6ee564b9835b4ce172c75a3f53ae9d91b7 \
-    PROTOC_SHA256_ARM64=01bf9d08808c7f96678b63f4bd8efa559bb4f83d5a7a270d5edaf507f9d5d9cf \
+    PROTOC_SHA256_AMD64=121f6c7afe1d4d0e3ea6aab9432038599250134cbf4474cb1167d2c7decd4278 \
+    PROTOC_SHA256_ARM64=8b8f18bd2b30346efbc698dd5a73dd7c805f3ef8380f6dfc95c768f3f1852f6a \
     NEXTEST_SHA256_AMD64=1d4ce302b820c41f4b89c5fb9bce45f0f0c94882c1cf08fc360caf08be6e7df4 \
     NEXTEST_SHA256_ARM64=3e35e8f6913af92558ba09d7155f74e35dd1f0024ef3cd891637433ae4eacbdd
 RUN case "$TARGETARCH" in amd64) p=x86_64 n=x86_64;; arm64) p=aarch_64 n=aarch64;; esac \
