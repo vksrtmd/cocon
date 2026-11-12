@@ -118,19 +118,30 @@ ENV PATH=/usr/local/go/bin:/home/claude/go/bin:$PATH \
     GOTOOLCHAIN=local
 FROM go-${WITH_GO} AS go
 
-# --- Helm, from its release. A Renovate bump fails the build until the digests (the release notes list them) follow.
+# --- Helm, from its release, checked against the release's signature: the signer's primary key must be one of
+# HELM_SIGNERS, keys from helm's KEYS file (each release's notes name its signer's fingerprint). The keys come from
+# KEYS at the release's tag, so a Renovate bump needs no other edit; a release by a signer not pinned here
+# fails the build until its fingerprint, checked against KEYS and the release notes, joins the list.
 FROM go AS helm-0
 FROM go AS helm-1
 # renovate: datasource=github-releases depName=helm/helm
 ARG HELM_VERSION=v3.22.1
+# Scott Rigby, George Jenkins
 ARG TARGETARCH \
-    HELM_SHA256_AMD64=896cf63684a42a723d61c980369d6e588330927deb13676ca0d85006dd6da0ea \
-    HELM_SHA256_ARM64=4c29e286b279d170fa048ddfc3e4e83dcd069ca9c52102766ba672d7149e694d
-RUN curl -fsSL -o /tmp/helm.tgz "https://get.helm.sh/helm-${HELM_VERSION}-linux-${TARGETARCH}.tar.gz" \
- && echo "$(case "$TARGETARCH" in amd64) echo "$HELM_SHA256_AMD64";; arm64) echo "$HELM_SHA256_ARM64";; esac)  /tmp/helm.tgz" \
-      | sha256sum -c \
+    HELM_SIGNERS="208DD36ED5BB3745A16743A4C7C6FBB5B91C1155 BF888333D96A1C18E2682AAED79D67C9EC016739"
+RUN f="helm-${HELM_VERSION}-linux-${TARGETARCH}.tar.gz" \
+ && curl -fsSL -o /tmp/helm.tgz "https://get.helm.sh/$f" \
+ && curl -fsSL -o /tmp/helm.tgz.asc "https://github.com/helm/helm/releases/download/${HELM_VERSION}/$f.asc" \
+ && curl -fsSL -o /tmp/helm-keys "https://raw.githubusercontent.com/helm/helm/${HELM_VERSION}/KEYS" \
+ && GNUPGHOME="$(mktemp -d)" && export GNUPGHOME \
+ && gpg --batch -q --no-default-keyring --keyring /tmp/helm-keys.kbx --import /tmp/helm-keys \
+ && gpg --batch --no-default-keyring --keyring /tmp/helm-keys.kbx --status-fd 1 --verify /tmp/helm.tgz.asc /tmp/helm.tgz \
+      | awk -v pinned=" $HELM_SIGNERS " ' \
+          $2 == "GOODSIG" { good = 1 } \
+          $2 == "VALIDSIG" && index(pinned, " " $12 " ") { ok = 1 } \
+          END { if (!(good && ok)) print "helm: the release is not signed by a key in HELM_SIGNERS" > "/dev/stderr"; exit !(good && ok) }' \
  && tar -xzf /tmp/helm.tgz -C /usr/local/bin --strip-components=1 --no-same-owner "linux-${TARGETARCH}/helm" \
- && rm /tmp/helm.tgz
+ && rm -r /tmp/helm.tgz /tmp/helm.tgz.asc /tmp/helm-keys /tmp/helm-keys.kbx "$GNUPGHOME"
 FROM helm-${WITH_HELM} AS helm
 
 # --- kcat, the Kafka client
@@ -174,9 +185,10 @@ FROM python-${WITH_PYTHON} AS python
 # left rustup unexecutable under GitHub's 20261028 runner image. cmake is for the build scripts of
 # -sys crates that call it (aws-lc-sys, rustls's default crypto, among them). protoc, for prost-build
 # and tonic-build, comes from protobuf's release with its include/ tree: Debian's 3.21 lacks the well-known
-# types' .proto files. protoc and cargo-nextest: a Renovate bump fails the build until the digests (the
-# release's assets list them) follow. cargo.sh moves each checkout's target dir off the bind mount; it goes
-# first on PATH. RUSTUP_AUTO_INSTALL=0: a rust-toolchain.toml naming a target or component the
+# types' .proto files. protoc: a Renovate bump fails the build until the digests (the release's assets list
+# them) follow. cargo-nextest: Renovate bumps each arch's tag and sha256 together (github-release-attachments,
+# renovate.json), one line per arch, as one regex match can't share a line with another. cargo.sh moves each
+# checkout's target dir off the bind mount; it goes first on PATH. RUSTUP_AUTO_INSTALL=0: a rust-toolchain.toml naming a target or component the
 # image lacks would otherwise make every cargo call try to install it, which the root-owned tree and
 # the allowlist (no static.rust-lang.org) refuse.
 FROM rust-src AS rust-tree
@@ -189,20 +201,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends cmake unzip \
  && rm -rf /var/lib/apt/lists/*
 # renovate: datasource=github-releases depName=protocolbuffers/protobuf extractVersion=^v(?<version>.+)$
 ARG PROTOC_VERSION=36.2
-# renovate: datasource=github-releases depName=nextest-rs/nextest extractVersion=^cargo-nextest-(?<version>.+)$
-ARG NEXTEST_VERSION=0.9.151
+# renovate-digest: depName=nextest-rs/nextest versioning=regex:^cargo-nextest-(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$
+ARG NEXTEST_TAG_AMD64=cargo-nextest-0.9.151 NEXTEST_SHA256_AMD64=1d4ce302b820c41f4b89c5fb9bce45f0f0c94882c1cf08fc360caf08be6e7df4
+# renovate-digest: depName=nextest-rs/nextest versioning=regex:^cargo-nextest-(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$
+ARG NEXTEST_TAG_ARM64=cargo-nextest-0.9.151 NEXTEST_SHA256_ARM64=3e35e8f6913af92558ba09d7155f74e35dd1f0024ef3cd891637433ae4eacbdd
 ARG TARGETARCH \
     PROTOC_SHA256_AMD64=121f6c7afe1d4d0e3ea6aab9432038599250134cbf4474cb1167d2c7decd4278 \
-    PROTOC_SHA256_ARM64=8b8f18bd2b30346efbc698dd5a73dd7c805f3ef8380f6dfc95c768f3f1852f6a \
-    NEXTEST_SHA256_AMD64=1d4ce302b820c41f4b89c5fb9bce45f0f0c94882c1cf08fc360caf08be6e7df4 \
-    NEXTEST_SHA256_ARM64=3e35e8f6913af92558ba09d7155f74e35dd1f0024ef3cd891637433ae4eacbdd
-RUN case "$TARGETARCH" in amd64) p=x86_64 n=x86_64;; arm64) p=aarch_64 n=aarch64;; esac \
+    PROTOC_SHA256_ARM64=8b8f18bd2b30346efbc698dd5a73dd7c805f3ef8380f6dfc95c768f3f1852f6a
+RUN case "$TARGETARCH" in amd64) p=x86_64 n=x86_64 nt="$NEXTEST_TAG_AMD64";; arm64) p=aarch_64 n=aarch64 nt="$NEXTEST_TAG_ARM64";; esac \
  && curl -fsSL -o /tmp/protoc.zip \
       "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${p}.zip" \
  && echo "$(case "$TARGETARCH" in amd64) echo "$PROTOC_SHA256_AMD64";; arm64) echo "$PROTOC_SHA256_ARM64";; esac)  /tmp/protoc.zip" \
       | sha256sum -c \
  && curl -fsSL -o /tmp/nextest.tgz \
-      "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-${n}-unknown-linux-gnu.tar.gz" \
+      "https://github.com/nextest-rs/nextest/releases/download/${nt}/${nt}-${n}-unknown-linux-gnu.tar.gz" \
  && echo "$(case "$TARGETARCH" in amd64) echo "$NEXTEST_SHA256_AMD64";; arm64) echo "$NEXTEST_SHA256_ARM64";; esac)  /tmp/nextest.tgz" \
       | sha256sum -c \
  && unzip -q /tmp/protoc.zip -d /usr/local bin/protoc 'include/*' \

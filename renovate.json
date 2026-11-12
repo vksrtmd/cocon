@@ -8,10 +8,21 @@
   ],
   "schedule": ["before 6am on monday"],
   "ignoreDeps": ["cocon"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "A release asset's tag and sha256 on one ARG line under a `# renovate-digest:` comment: Renovate bumps the tag and takes the new sha256 from the new release's assets",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/"],
+      "matchStrings": [
+        "# renovate-digest: depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\nARG \\w+_TAG_\\w+=(?<currentValue>\\S+) \\w+_SHA256_\\w+=(?<currentDigest>[0-9a-f]{64})\\n"
+      ],
+      "datasourceTemplate": "github-release-attachments"
+    }
+  ],
   "packageRules": [
     {
       "description": "Wait before proposing a release, so most malicious ones are yanked before they reach a PR",
-      "matchDatasources": ["npm", "github-releases", "github-tags", "go", "docker"],
+      "matchDatasources": ["npm", "github-releases", "github-release-attachments", "github-tags", "go", "docker"],
       "minimumReleaseAge": "7 days"
     },
     {

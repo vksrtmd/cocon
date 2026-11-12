@@ -35,6 +35,17 @@ Reachable hosts are the ones in `cocon/squid/allowlist.txt`. Not reachable from 
   instead of hashing the download: `gh api repos/<owner>/<repo>/releases/tags/<tag> --jq '.assets[] | {name, digest}'`.
 - The GitHub CLI apt key's fingerprints are listed in `cli/cli`'s install_linux.md (in its docs folder) on `raw.githubusercontent.com`.
 
+A release download pinned by sha256 next to a `# renovate:` version comment fails Renovate's bump until a person
+copies the new digests in. Prefer one of the two shapes Renovate can bump alone:
+
+- The project signs its releases: verify the signature, the signer's primary key fingerprint pinned (Helm's
+  `HELM_SIGNERS`). A new signer fails the build until pinned: take its fingerprint from the release notes and
+  check it is in the project's KEYS file.
+- The asset is on a GitHub release: one `ARG <NAME>_TAG_<ARCH>=<tag> <NAME>_SHA256_<ARCH>=<digest>` line per
+  arch under a `# renovate-digest:` comment (cargo-nextest); Renovate's `github-release-attachments` datasource
+  takes the new digest from the new release's assets. One line per arch: two matches sharing a version line
+  leave the second digest stale.
+
 Renovate config: `npx --yes --package renovate renovate-config-validator --strict --no-global` validates it; ignore its
 re2 stack trace, the exit status is the result. `renovate --dry-run=lookup` can't finish from the cocoon (GitHub API rate
 limit without a token, Docker Hub's API refused), so say in the PR body that grouping and release age went unobserved.

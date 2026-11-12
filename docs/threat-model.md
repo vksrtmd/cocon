@@ -201,7 +201,7 @@ Known gaps:
 
 | Promise | Enforced by | Test |
 | --- | --- | --- |
-| Everything the image build downloads is checked against a pin, or comes from a digest-pinned image | `cocon/Dockerfile` | `tests/test_dockerfile.py`: `test_image_build_checks_every_download`; the CI image build (`cocon.yml`) |
+| Everything the image build downloads is checked against a pinned digest, or a signature by a key whose fingerprint is pinned, or comes from a digest-pinned image | `cocon/Dockerfile` | `tests/test_dockerfile.py`: `test_image_build_checks_every_download`; the CI image build (`cocon.yml`) |
 | The image's npm tools install from a committed lockfile, with install scripts off unless listed | `cocon/npm-tools/` | `tests/test_dockerfile.py`: `test_kit_lockfile_manifest_and_rebuild_agree` |
 | The Playwright browser fetch, the one container with open internet, runs no npm install scripts | launcher | `tests/test_launcher_with.py`: `test_playwright_fetch_runs_no_npm_install_scripts` |
 | That fetch reads nothing a session can write but the Playwright version, which `jq` parses out of `package.json` (node's `require()` of that path would run a module planted there): it mounts only its own volume, which no session mounts, and `node_modules` read-only; the browsers reach the session's cache through a copy with no network | launcher | `tests/test_launcher_with.py`: `test_playwright_fetch_mounts_nothing_the_session_writes`, `test_playwright_downloads_then_copies_into_cache_volume_before_session` |
