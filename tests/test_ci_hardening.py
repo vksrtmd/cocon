@@ -9,7 +9,8 @@ import unittest
 from harness import ROOT
 
 WORKFLOWS = ("cocon.yml", "shell.yml")
-RENOVATE_AGE = {"npm": "7 days", "github-releases": "7 days", "docker": "7 days"}
+RENOVATE_AGE = {"npm": "7 days", "github-releases": "7 days", "github-release-attachments": "7 days",
+                "docker": "7 days"}
 
 
 def workflow(name):
@@ -109,7 +110,7 @@ class CiHardening(unittest.TestCase):
         self.assertEqual(renovate_problems(cfg), [])
         age = json.loads(json.dumps(cfg))
         age["packageRules"][0]["minimumReleaseAge"] = "1 day"
-        self.assertEqual(len(renovate_problems(age)), 3)
+        self.assertEqual(len(renovate_problems(age)), 4)
         grouped = json.loads(json.dumps(cfg))
         rule = next(r for r in grouped["packageRules"] if r.get("groupName") == "digests")
         rule["matchPackageNames"] = ["!ubuntu/squid"]
