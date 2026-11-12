@@ -11,7 +11,7 @@
     "else and fetches nothing."
   ],
   "dependencies": {
-    "@anthropic-ai/claude-code": "2.1.318",
+    "@anthropic-ai/claude-code": "2.1.322",
     "corepack": "0.36.0",
     "playwright": "1.65.0",
     "typescript": "7.0.2",
