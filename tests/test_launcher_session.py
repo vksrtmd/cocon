@@ -57,20 +57,18 @@ class Session(LauncherCase):
 
 
 class ConfigDir(LauncherCase):
-    def test_setup_mounted_read_only_claude_md_as_user_level(self):
+    def test_setup_mounted_read_only_as_user_level(self):
         cfg = self.tmp / "cfg"
         (cfg / "skills").mkdir(parents=True)
         (cfg / "hooks").mkdir()
         (cfg / "rules").mkdir()
         (cfg / "docs").mkdir()
-        (cfg / "CLAUDE.md").touch()
         (cfg / "settings.json").touch()
         res = self.launch(self.new_repo("cfgrepo"), env={"COCON_CONFIG": str(cfg)})
         self.assertMount(res, f"{cfg}/skills:/home/claude/.claude/skills:ro")
         self.assertMount(res, f"{cfg}/hooks:/home/claude/.claude/hooks:ro")
         self.assertMount(res, f"{cfg}/rules:/home/claude/.claude/rules:ro")
         self.assertMount(res, f"{cfg}/docs:/home/claude/.claude/docs:ro")
-        self.assertMount(res, f"{cfg}/CLAUDE.md:/home/claude/.claude/CLAUDE.md:ro")
         self.assertMount(res, f"{cfg}/settings.json:/opt/cocon/settings.json:ro")
         self.assertNoMount(res, f"{cfg}/agents:/home/claude/.claude/agents:ro")
 

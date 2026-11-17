@@ -1,5 +1,5 @@
 """cocon: run Claude Code for one repo inside an isolated container,
-with your setup from $COCON_CONFIG (default ~/.claude: skills, agents, rules, CLAUDE.md, settings.json).
+with your setup from $COCON_CONFIG (default ~/.claude: skills, agents, rules, settings.json; not CLAUDE.md).
 
   cocon [options] [REPO] [-- claude args...]
   cocon --ls

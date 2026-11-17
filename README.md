@@ -5,7 +5,7 @@ Run Claude Code in a Docker container on your Mac. *Cocon* is French for cocoon.
 - One or more cocoons per repo; reads only what you give it, writes only in the repo.
 - Outbound traffic only through an allowlisting proxy with an audit log.
 - Your tokens held outside the cocoon by a credential broker.
-- Your own Claude setup (skills, agents, plugins, `CLAUDE.md`) mounted in.
+- Your own Claude setup (skills, agents, plugins) mounted in; not its `CLAUDE.md`.
 
 ## Contents
 
@@ -224,8 +224,9 @@ The launcher mounts these from `COCON_CONFIG`, whichever exist; missing ones are
 
 | Path | In the cocoon |
 |---|---|
-| `CLAUDE.md`, `skills/`, `agents/`, `rules/`, `docs/`, `output-styles/`, `commands/`, `hooks/`, `mods/` | mounted **read-only** as user-level config |
+| `skills/`, `agents/`, `rules/`, `docs/`, `output-styles/`, `commands/`, `hooks/`, `mods/` | mounted **read-only** as user-level config |
 | `settings.json` | **copied over** the cocoon's settings at every start |
+| `CLAUDE.md` | **not mounted** |
 
 - At start the cocoon adds missing marketplaces and installs missing enabled plugins into the repo's config volume.
 - Changes made in-session with `/config` or `/plugin` are lost at the next start.
