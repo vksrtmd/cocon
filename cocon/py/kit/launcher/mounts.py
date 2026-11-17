@@ -122,14 +122,12 @@ class Mounts:
         self.hooks_dirs.append(norm)
 
     def config(self):
-        """Your setup from $COCON_CONFIG, read-only, as the container's user-level config. When it lives inside
+        """Your setup from $COCON_CONFIG, read-only, as the container's user-level config, except CLAUDE.md. When it lives inside
         the project (a session on your config repo's main checkout, or on ~/.claude), the project mount would let the
         session rewrite the live files, so the checkout is read-only too; a worktree of that repo is a different
         checkout and stays writable."""
         config = os.environ.get("COCON_CONFIG") or f"{os.environ['HOME']}/.claude"
         mounts = [(f"{config}/{d}", f"{CC}/{d}") for d in CONFIG_DIRS if os.path.isdir(f"{config}/{d}")]
-        if os.path.isfile(f"{config}/CLAUDE.md"):
-            mounts.append((f"{config}/CLAUDE.md", f"{CC}/CLAUDE.md"))
         # settings.json is copied into the config volume by the entrypoint on each start.
         if os.path.isfile(f"{config}/settings.json"):
             mounts.append((f"{config}/settings.json", "/opt/cocon/settings.json"))
