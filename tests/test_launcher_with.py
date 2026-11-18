@@ -147,13 +147,13 @@ class With(LauncherCase):
         res = self.launch(self.r, "--with", "go")
         self.assertCall(res, "volume create cocon-bld-gomod")
         self.assertMount(res, "cocon-bld-gomod:/home/claude/go/pkg/mod")
-        self.assertNoCall(self.launch(self.r), "gomod")
+        self.assertNoCall(self.launch(self.r), "cocon-bld-gomod")
 
     def test_rust_per_repo_cargo_volume_created_and_mounted(self):
         res = self.launch(self.r, "--with", "rust")
         self.assertCall(res, "volume create cocon-bld-cargo")
         self.assertMount(res, "cocon-bld-cargo:/home/claude/.cargo")
-        self.assertNoCall(self.launch(self.r), "cargo")
+        self.assertNoCall(self.launch(self.r), "cocon-bld-cargo")
 
     def test_playwright_downloads_then_copies_into_cache_volume_before_session(self):
         r = self.new_repo("pw")

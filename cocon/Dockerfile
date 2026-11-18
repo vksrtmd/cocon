@@ -187,8 +187,8 @@ FROM python-${WITH_PYTHON} AS python
 # and tonic-build, comes from protobuf's release with its include/ tree: Debian's 3.21 lacks the well-known
 # types' .proto files. protoc: a Renovate bump fails the build until the digests (the release's assets list
 # them) follow. cargo-nextest: Renovate bumps each arch's tag and sha256 together (github-release-attachments,
-# renovate.json), one line per arch, as one regex match can't share a line with another. cargo.sh moves each
-# checkout's target dir off the bind mount; it goes first on PATH. RUSTUP_AUTO_INSTALL=0: a rust-toolchain.toml naming a target or component the
+# renovate.json), one line per arch, as one regex match can't share a line with another. cargo.sh moves the
+# build and target dirs off the bind mount; it goes first on PATH. RUSTUP_AUTO_INSTALL=0: a rust-toolchain.toml naming a target or component the
 # image lacks would otherwise make every cargo call try to install it, which the root-owned tree and
 # the allowlist (no static.rust-lang.org) refuse.
 FROM rust-src AS rust-tree
