@@ -154,7 +154,7 @@ cocon foo --with postgres,kafka
 | `go` | Go toolchain, gopls; modules in a per-repo volume |
 | `helm` | Helm |
 | `python` | uv, pip, venv |
-| `rust` | rustup toolchain (fixed: rustup installs nothing), cmake, protoc, cargo-nextest; crates and each checkout's build in a per-repo volume |
+| `rust` | rustup toolchain (fixed: rustup installs nothing), cmake, protoc, cargo-nextest; crates and builds in a per-repo volume, compiled dependencies shared by a checkout's worktrees |
 | `tauri` | WebKitGTK, librsvg, appindicator dev libraries and patchelf, for building Tauri apps; pair it with `rust` |
 
 Inside the cocoon: `postgres:5432`, `clickhouse:8123` (HTTP) / `9000`, `kafka:9092`, user and password `dev`;
