@@ -17,7 +17,7 @@ class Help(Exception):
 
 class Options:
     def __init__(self):
-        self.yolo = self.shell = self.detach = False
+        self.shell = self.detach = False
         self.action, self.target, self.worktree = "run", "", ""
         self.withs = []  # the extras asked for, in the order given
         self.claude_args, self.ports = [], []
@@ -41,8 +41,6 @@ def parse(argv):
             o.relaunch.append(a)
         if a in ACTIONS:
             o.action = ACTIONS[a]
-        elif a == "--yolo":
-            o.yolo = True
         elif a == "--shell":
             o.shell = True
         elif a == "--detach":

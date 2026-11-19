@@ -295,7 +295,7 @@ class Session:
         if self.opts.shell:
             cmd = ["bash"]
         else:
-            cmd = ["claude", *(["--dangerously-skip-permissions"] if self.opts.yolo else []), *self.opts.claude_args]
+            cmd = ["claude", *self.opts.claude_args]
         # Ctrl-C in the session is the session's: the launcher waits for it, then cleans up, as the shell does.
         old = signal.signal(signal.SIGINT, lambda *_: None)
         try:
