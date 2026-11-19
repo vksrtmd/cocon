@@ -21,6 +21,9 @@ if [ "$hits" -ne 1 ]; then
   exit 1
 fi
 proj=$(find -P . -mindepth 2 -maxdepth 2 -type f -name "$sid.jsonl" -print | sed 's|^\./||; s|/[^/]*$||')
+case $proj in
+  *[!A-Za-z0-9._-]*) echo "unexpected project dir name" >&2; exit 1 ;;
+esac
 {
   find -P "./$proj/$sid.jsonl" -type f -print0
   find -P "./$proj/$sid" -type f -print0 2>/dev/null || true
@@ -41,7 +44,9 @@ def volume_named(want, volumes):
 
 def import_transcript(p, source, sid):
     listing = run(["docker", "volume", "ls", "-q", "--filter", "name=cocon-"], quiet=True)
-    volumes = listing.stdout.split() if listing.returncode == 0 else []
+    if listing.returncode:
+        raise Fail("can't list Docker volumes (docker volume ls failed)")
+    volumes = listing.stdout.split()
     owner, repo = source.split("/", 1)
     src = volume_named(f"cocon-{owner}__{repo}-config", volumes)
     if not src:

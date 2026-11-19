@@ -145,6 +145,23 @@ class Script(unittest.TestCase):
         self.assertIn("found 2", r.stderr)
         self.assertEqual(list(self.dst.rglob("*")), [])
 
+    def test_symlinked_project_dir_is_not_followed(self):
+        (self.src / "elsewhere").mkdir()
+        (self.src / "elsewhere" / f"{SID}.jsonl").write_text("x")
+        os.symlink("../elsewhere", self.src / "projects" / "-work-link")
+        r = self.run_script()
+        self.assertIn("found 0", r.stderr)
+        self.assertEqual(list(self.dst.rglob("*")), [])
+
+    def test_project_dir_name_outside_claudes_charset_is_refused(self):
+        odd = self.src / "projects" / "a\nb"
+        odd.mkdir()
+        (odd / f"{SID}.jsonl").write_text("x")
+        r = self.run_script()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("unexpected project dir name", r.stderr)
+        self.assertEqual(list(self.dst.rglob("*")), [])
+
     def test_no_hit_is_refused(self):
         r = self.run_script()
         self.assertNotEqual(r.returncode, 0)
