@@ -135,7 +135,6 @@ These settings need a second reviewer: a PR opened or pushed to under your accou
 cocon clone acme/foo                    # clone into ~/cocon-repos/foo
 cocon foo                               # Claude on that repo, from anywhere
 cd ~/cocon-repos/foo && cocon    # same
-cocon foo --yolo                        # no permission prompts
 cocon foo -- -c                         # anything after -- goes to claude (here: continue)
 cocon foo --shell                       # a shell instead of Claude
 ```

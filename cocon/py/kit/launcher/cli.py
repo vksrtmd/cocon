@@ -16,7 +16,6 @@ with your setup from $COCON_CONFIG (default ~/.claude: skills, agents, rules, se
                     go (toolchain, gopls), helm, python (uv, pip, venv),
                     rust (rustup toolchain, cmake, protoc, cargo-nextest, cargo volume),
                     tauri (WebKitGTK and the other system libs Tauri builds against; add rust)
-  --yolo          pass --dangerously-skip-permissions to claude
   --shell         open bash in the container instead of claude
   --build         rebuild cocon:latest and every cocon:<extras> image (e.g. after a
                   version bump in cocon/), then exit; a launch builds its image only when missing
