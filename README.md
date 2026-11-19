@@ -167,6 +167,7 @@ cocon foo --worktree 45-auth            # task on ~/cocon-repos/foo/.claude/work
 cocon foo --worktree 45-auth --detach   # same, in a tmux session that outlives the terminal
 cocon --attach foo --worktree 45-auth   # back to it
 cocon --ls                              # every repo's services, ports and sessions
+cocon foo --import-transcript acme/bar 0a1b2c3d-1111-4222-8333-444455556666   # copy that one session of acme/bar into foo's transcripts
 ```
 
 - `--worktree <name>`: reuses the worktree if it exists, checks out local branch `<name>` if
