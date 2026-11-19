@@ -29,6 +29,9 @@ with your setup from $COCON_CONFIG (default ~/.claude: skills, agents, rules, se
   --doctor        check the host setup for this repo, the GitHub token's type and the repos it
                   reaches included; exits non-zero on a failure
   --repin         pin this repo's current origin as its repo ID, showing the old and new, then exit
+  --import-transcript OWNER/REPO SESSION_ID
+                  copy that one session of OWNER/REPO's transcripts into this repo's Claude config volume,
+                  same path; both repos must have been launched, then exit
   --trust-git     show the risky git config entries added since the trusted baseline, and after
                   confirming make them the baseline (it changes only this way)
   --destroy       --down (running sessions' brokers too), then remove this repo's own volumes
@@ -57,7 +60,7 @@ decides what.
 import os
 import signal
 
-from kit.launcher import audit, clone, listing, options, services, tmux, trust
+from kit.launcher import audit, clone, listing, options, services, tmux, transcripts, trust
 from kit.launcher.doctor import Doctor
 from kit.launcher.project import Project
 from kit.launcher.session import Session
@@ -84,6 +87,8 @@ def launch(argv):
     p = Project(opts, repos)
     if opts.action == "repin":
         return p.repin()
+    if opts.action == "import":
+        return transcripts.import_transcript(p, opts.import_from, opts.import_id)
     if opts.detach:
         return tmux.detach(p)
     action = opts.action

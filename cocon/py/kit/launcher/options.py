@@ -8,6 +8,8 @@ KNOWN = ("clickhouse", "docker", "go", "helm", "kafka", "playwright", "postgres"
 ACTIONS = {"--build": "build", "--reload-proxy": "reload", "--proxy-log": "log", "--rotate-logs": "rotate",
            "--down": "down", "--destroy": "destroy", "--doctor": "doctor", "--repin": "repin", "--trust-git": "trust",
            "--attach": "attach", "--ls": "list"}
+REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+SESSION_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 PORT_RE = re.compile(r"[1-9][0-9]{0,4}(:[1-9][0-9]{0,4})?")
 
 
@@ -19,6 +21,7 @@ class Options:
     def __init__(self):
         self.yolo = self.shell = self.detach = False
         self.action, self.target, self.worktree = "run", "", ""
+        self.import_from = self.import_id = ""  # --import-transcript's OWNER/REPO and SESSION_ID
         self.withs = []  # the extras asked for, in the order given
         self.claude_args, self.ports = [], []
         self.relaunch = []  # the args minus --detach, for the launcher inside tmux
@@ -47,6 +50,16 @@ def parse(argv):
             o.shell = True
         elif a == "--detach":
             o.detach = True
+        elif a == "--import-transcript":
+            if len(args) < 2:
+                raise Fail("--import-transcript needs OWNER/REPO SESSION_ID")
+            o.import_from, o.import_id = args.pop(0), args.pop(0)
+            o.relaunch += [o.import_from, o.import_id]
+            if not REPO_RE.fullmatch(o.import_from):
+                raise Fail(f"bad OWNER/REPO {o.import_from} for --import-transcript")
+            if not SESSION_RE.fullmatch(o.import_id):
+                raise Fail(f"bad SESSION_ID {o.import_id} for --import-transcript (a lowercase UUID)")
+            o.action = "import"
         elif a in ("--worktree", "--with", "--port"):
             if not args:
                 raise Fail({"--worktree": "--worktree needs a name", "--with": "--with needs a name list",
