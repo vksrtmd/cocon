@@ -15,7 +15,7 @@ fi
 cd "$src/projects"
 list=$(mktemp)
 trap 'rm -f "$list"' EXIT
-hits=$(find -P . -mindepth 2 -maxdepth 2 -type f -name "$sid.jsonl" -print0 | tr -cd '\0' | wc -c)
+hits=$(find -P . -mindepth 2 -maxdepth 2 -type f -name "$sid.jsonl" -print0 | tr -cd '\0' | wc -c | tr -d ' ')
 if [ "$hits" -ne 1 ]; then
   echo "found $hits regular files named $sid.jsonl, need exactly 1" >&2
   exit 1
@@ -31,7 +31,7 @@ esac
 mkdir -p "$dst/projects"
 tar --no-recursion --null -cf - -T "$list" | tar --no-same-owner -xf - -C "$dst/projects"
 echo "/home/claude/.claude/projects/$proj/$sid.jsonl"
-tr -cd '\0' <"$list" | wc -c
+tr -cd '\0' <"$list" | wc -c | tr -d ' '
 '''
 
 
