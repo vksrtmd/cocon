@@ -30,8 +30,9 @@ Cloned to {dest}. Create a fine-grained token for {owner}/{repo}
 (see README > GitHub access), then:
 
   mkdir -p '{cfg}/tokens'
-  printf 'GH_TOKEN=%s\\n' 'github_pat_...' > '{tok}'
-  chmod 600 '{tok}'
+  printf 'GH_TOKEN: '; IFS= read -rs tok; echo
+  (umask 077; printf 'GH_TOKEN=%s\\n' "$tok" > '{tok}')
+  unset tok
 
 Start working:  cocon {name}""")
     return 0
