@@ -62,3 +62,25 @@ tests/                 Python unittest suites for the kit (ADR 0013); check.sh r
   test that skips for a missing image skips in CI too, where `shell.yml` fails a skip: list the image in its pull step.
 - When you amend an ADR in `docs/adr/`, edit the body statements the amendment supersedes; an appended section
   alone leaves the old claim standing above it.
+
+## Code
+
+Judgement calls for writing and review; `tests/check.sh` enforces the mechanical ones.
+
+- Shell: `set -e` misses a failed command substitution inside another substitution, an `echo "$(...)"`, an
+  `export X="$(...)"` (`tests/test_dockerfile.py` checks the Dockerfile's) or a line of several assignments (a later
+  `$(...)` overwrites the earlier one's status). Assign each substitution on its own line, then `|| die "..."` where
+  its failure matters.
+- Text a session wrote (a file under the checkout or its `.git`, a ref name, a git config value) is hostile input on
+  the host. Read such a file through `kit.util.read_pointer` or `kit.workflowpush.sessionfiles`, which refuse a
+  non-regular file without blocking (`tests/test_kit_reads.py` makes each open site name the kind of file it reads).
+  Refuse what a command can't take (a NUL byte) with a message before that text reaches its command line, before
+  anything has acted.
+- Match a command's output by exact field: `git ls-remote URL refs/heads/main` also lists a session-pushed
+  `refs/heads/x/refs/heads/main`, sorted first.
+- Session-controlled output the user reads before confirming (a diff before y/N) is captured as bytes and shown
+  through `cat_v` (`kit.workflowpush.cli`); `kit.util.run` captures text, turning a carriage return into a newline
+  before `cat_v` can show it as `^M`.
+- A test stub models what the real tool returns, superset cases included (GitHub's `user/repos` also lists public
+  repos the user collaborates on), and a test of a filter feeds it what the filter must drop. An external API claim
+  goes into a test after one live read-only call; until then the report marks it unverified.
