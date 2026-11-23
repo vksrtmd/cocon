@@ -187,9 +187,11 @@ Known gaps:
 | Each checkout and worktree has a slug no other repo's checkout shares, naming its compose project, services, data and `node_modules`; `--destroy` removes only its own | launcher | `tests/test_launcher_repo.py`: `test_github_origin_slug_is_the_repo_id_whatever_the_folder`, `test_names_that_sanitize_alike_by_the_same_owner_differ`, `test_main_folder_with_separator_and_a_worktree_differ`, `test_destroy_names_only_its_own_project` |
 | Each session has its own broker, holding only its repo's token, and its repo's own allowlist | launcher | `tests/test_launcher_broker.py`: `test_two_sessions_each_their_own_broker_ending_one_leaves_the_others`; `tests/test_launcher_repo.py`: `test_github_repo_allowlist_file_created_and_passed_to_compose` |
 | A session can't reach another checkout's broker, databases or Docker sidecar: each compose project has its own internal network | `cocon/compose.yml` (a network per project, [ADR 0002](adr/0002-compose-project-per-worktree.md)) | `tests/test_compose_integration.py`: `test_session_network_cant_reach_another_projects_broker` (two projects; a container on the first's network can't connect to the second's broker by name or address) |
+| Another repo's transcript reaches a session only when the user names it with `--import-transcript`; the copy follows no symlinks, so only that session's regular files cross | `cocon/py/kit/launcher/transcripts.py` | `tests/test_launcher_transcript.py`: `test_symlinked_session_file_carries_nothing`, `test_symlink_inside_session_dir_is_skipped`, `test_symlinked_session_dir_is_not_followed`, `test_two_hits_are_refused`, `test_copies_main_and_subagent_transcripts_keeping_paths`, `test_source_matched_case_insensitively_and_copied_read_only_without_network` |
 
 Known gaps:
 
+- **low.** The imported text is repo B's and may carry prompt injection or secrets pasted there into A, where A's token can push it out. Accepted: the user chose the session. No ticket.
 - **low.** Two checkouts without a GitHub `origin` in same-named folders share a slug and per-repo volumes; `--doctor`
   says so. Accepted in ADR 0010. No ticket.
 - **low.** A second clone of one repo shares its slug: databases, `node_modules` and the detached session, and

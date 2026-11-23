@@ -8,4 +8,5 @@ pasted secrets and push them out with A's token, or edit a plugin, cached module
 session then runs. Splitting the whole config dir, not a list of sensitive paths, covers state files Claude Code
 adds later. The costs: auth by `claude setup-token` in `claude.env`, plugins
 installed once per repo, cold first builds and duplicated cache disk, and `--destroy` also deletes the repo's
-transcripts.
+transcripts. The one exception: the user copies a named session's transcript from another repo's config volume
+with `--import-transcript`, regular files only (symlinks are never followed), so a retro can cite it.

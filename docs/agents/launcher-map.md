@@ -35,4 +35,5 @@ host-guard, which the launcher calls in-process for every check and every host g
 | `--doctor` | `doctor.py` | `class Doctor:` |
 | `--down` | `services.py` | `def down(p):` |
 | Names of a checkout's brokers, forwarders, CA volumes and sidecar; what gone launchers left | `services.py` | `def stale(kind, slug, ours):` |
+| `--import-transcript`: copying one session between repos' config volumes | `transcripts.py` | `def import_transcript(p, source, sid):` |
 | Detached sessions (tmux) | `tmux.py` | `def detach(p):` |
