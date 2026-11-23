@@ -268,14 +268,16 @@ class Doctor(LauncherCase):
         self.assertNoCall(res, " run")
 
     def test_points_to_branch_protection_section(self):
-        """--doctor can't read branch protection with the repo token: it points to the README section"""
+        """--doctor can't read branch protection or the Actions settings with the repo token: it points to the README"""
         r = self.new_repo("doc")
         self.git(r, "remote", "add", "origin", "git@github.com:acme/doc.git")
         res = self.launch(r, "--doctor")
         self.assertIn("--    branch protection: can't be read with a repo-scoped token; see README > Branch protection",
                       res.text)
+        self.assertIn("--    CI secrets: can't be read with a repo-scoped token; see README > CI secrets", res.text)
         readme = (ROOT / "README.md").read_text()
         self.assertRegex(readme, r"(?m)^#{2,3} Branch protection$")
+        self.assertRegex(readme, r"(?m)^#{2,3} CI secrets$")
         self.assertRegex(readme, r"(?m)^## GitHub access \(repo-scoped tokens\)$")
 
     def test_one_line_per_failure_exits_non_zero(self):

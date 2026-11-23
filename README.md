@@ -11,7 +11,7 @@ Run Claude Code in a Docker container on your Mac. *Cocon* is French for cocoon.
 
 - [Quick start](#quick-start)
 - [Setup](#setup)
-- [GitHub access](#github-access-repo-scoped-tokens), [branch protection](#branch-protection)
+- [GitHub access](#github-access-repo-scoped-tokens), [branch protection](#branch-protection), [CI secrets](#ci-secrets)
 - [Daily use](#daily-use)
 - [Configuration reference](#configuration-reference)
 - [Security](#security)
@@ -91,7 +91,8 @@ One fine-grained token per repository, so a session can only touch that repo.
    chmod 600 ~/.config/cocon/tokens/OWNER__REPO.env
    ```
 
-6. Set up [branch protection](#branch-protection). Without it a session can merge its own work.
+6. Set up [branch protection](#branch-protection). Without it a session can merge its own work. If the repo's
+   Actions have secrets, set up [CI secrets](#ci-secrets) too.
 7. Check: `cocon foo --shell`, then `gh issue list` and `git push --dry-run`. The first launch builds the
    image first.
 
@@ -101,8 +102,10 @@ private repos besides this one.
 **Do not grant** anything beyond the table above, and never *All repositories*. The launcher can't see a token's
 write access to your other public repos: GitHub lists the public repos you collaborate on whatever the token reaches.
 
-- **Workflows**: lets a session edit `.github/workflows/`, and so what CI runs with the repo's secrets. Without it a
-  session leaves its workflow change as a patch, and `workflow-push NAME` shows it to you before pushing it.
+- **Workflows**: lets a session edit `.github/workflows/`, and so add a workflow that runs on its branch with any
+  repo secret and a `GITHUB_TOKEN` with any write permission. Without it a session leaves its workflow change as a
+  patch, and `workflow-push NAME` shows it to you before pushing it. Your existing workflows still run its branch's
+  code with what they give that branch (see [CI secrets](#ci-secrets)).
 - **Administration**: lets a session change the repo's settings, including the branch protection below.
 - Any other permission (Secrets, Environments, Pages, Webhooks, Deployments...): the session needs none.
 
@@ -126,6 +129,35 @@ Why each one:
   push** voids that: the push was made as you, so your approval of it doesn't count and the PR needs someone else's.
 
 These settings need a second reviewer: a PR opened or pushed to under your account can't be approved by you.
+
+### CI secrets
+
+A branch the session pushes runs your workflows on that branch's code: its `package.json` scripts, Makefile, tests
+and local actions under .github/actions/, none of which the Workflows permission covers. That code gets every secret
+those workflows pass it, and open internet. So keep anything valuable out of reach of any branch but the default one
+(repo → Settings):
+
+- **Secrets**: move deploy and publish secrets out of *Secrets and variables → Actions* (and any organization secret
+  shared with the repo) into an environment (*Environments → New environment*) whose *Deployment branches and tags*
+  allows only the default branch; don't add `refs/pull/*/merge`. *Required reviewers* there add a second lock. The
+  deploy job names the environment (`environment: production`), a line the session can't edit. Environments in a
+  private repo need GitHub Pro, Team or Enterprise; on Free, keep secrets out of every workflow that runs on other
+  branches.
+- **OIDC**: a cloud role a workflow assumes is a secret too. Limit its trust policy's `sub` to
+  `repo:OWNER/REPO:environment:production` or `repo:OWNER/REPO:ref:refs/heads/main`, never `repo:OWNER/REPO:*`.
+- **Workflow token**: under *Actions → General → Workflow permissions*, choose *Read repository contents and packages
+  permissions* (a default; a workflow's own `permissions:` block can ask for more, which is why the token lacks
+  Workflows) and leave *Allow GitHub Actions to create and approve pull requests* off: with it on, the session's
+  code approves its own PR through CI, past [branch protection](#branch-protection).
+- **Runners**: no self-hosted runner for jobs on other branches; it runs the branch's code on your network.
+
+Check from the Mac, with your own `gh` login (the session's token can't read these):
+
+```sh
+gh secret list -R OWNER/REPO       # repo-level secrets: empty, or harmless
+gh api repos/OWNER/REPO/actions/permissions/workflow
+# want: "default_workflow_permissions":"read", "can_approve_pull_request_reviews":false
+```
 
 ## Daily use
 

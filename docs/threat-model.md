@@ -206,7 +206,7 @@ Known gaps:
 | The Playwright browser fetch, the one container with open internet, runs no npm install scripts | launcher | `tests/test_launcher_with.py`: `test_playwright_fetch_runs_no_npm_install_scripts` |
 | That fetch reads nothing a session can write but the Playwright version, which `jq` parses out of `package.json` (node's `require()` of that path would run a module planted there): it mounts only its own volume, which no session mounts, and `node_modules` read-only; the browsers reach the session's cache through a copy with no network | launcher | `tests/test_launcher_with.py`: `test_playwright_fetch_mounts_nothing_the_session_writes`, `test_playwright_downloads_then_copies_into_cache_volume_before_session` |
 | PR code on CI runs with a read-only `GITHUB_TOKEN` that isn't left in the git config | `permissions` and `persist-credentials: false` in both workflows | `tests/test_ci_hardening.py`: `test_workflows_grant_only_contents_read`, `test_every_checkout_drops_the_token` |
-| A session can't change the workflows: its token lacks the Workflows permission, and `workflow-push` confirms what reaches them | token setup (README), `workflow-push` | see `workflow-push` |
+| A session can't change the workflow files: its token lacks the Workflows permission, and `workflow-push` confirms what reaches them. It still changes the code they run (next gap) | token setup (README), `workflow-push` | see `workflow-push` |
 | Renovate proposes a version only once it is 7 days old, and the broker's and egress proxy's images get PRs of their own | `renovate.json` | `tests/test_ci_hardening.py`: `test_renovate_waits_7_days_and_isolates_the_broker_and_proxy_images` |
 | CI runner labels and shellcheck are pinned | `shell.yml`, `cocon.yml` | `tests/test_ci_hardening.py`: `test_runners_and_shellcheck_are_pinned` |
 
@@ -214,6 +214,12 @@ Known gaps:
 
 - **medium.** A PR's code runs on GitHub's runners with open internet; the read-only token limits what it can
   write, not what it can send. Accepted in ADR 0007. No ticket.
+- **high.** In a repo using cocon, a branch the session pushes runs that repo's workflows on the branch's code
+  (scripts, tests, local actions under .github/actions/), with every secret, OIDC role and `GITHUB_TOKEN` write those
+  workflows give a non-default branch (withholding Workflows keeps out only what they don't), and open internet: a real token out, and the repo's code with it, past the egress allowlist. With
+  *Allow GitHub Actions to create and approve pull requests* on, that code approves its own PR. The kit can't read or
+  change the repo's Actions settings; the README (CI secrets) lists them and `--doctor` points there. Accepted in ADR
+  0007. No ticket.
 - **medium.** apt packages from the base image's distribution are unpinned beyond the base image's digest. Outside what
   the image build verifies (every download it makes, pinned and checked). No ticket.
 - **low.** The image isn't signed or scanned for vulnerabilities. Outside what the image build verifies. No ticket.

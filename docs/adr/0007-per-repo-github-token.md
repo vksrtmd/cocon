@@ -14,3 +14,7 @@ App and its private key kept on the host; switch when rotation becomes the pain.
 - The session chooses what CI runs: the workflows run the PR's own code on GitHub's runners with open internet, so
   they get a read-only `GITHUB_TOKEN` not left in the git config. Workflow changes reach the repo only as a patch the
   user applies.
+- Without the Workflows permission the session can't edit a workflow file, but its pushed branch still runs the
+  workflows on its own code, with whatever secrets, OIDC roles and token writes they hand that branch. The kit can't
+  read the repo's Actions settings with this token, so the README (CI secrets) lists them: deploy secrets in an
+  environment only the default branch reaches, a read-only workflow token that can't approve PRs.
