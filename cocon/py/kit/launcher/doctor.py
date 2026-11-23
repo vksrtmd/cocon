@@ -144,6 +144,7 @@ class Doctor:
             self.no(f"pin: {p.pin_off}")
         self.token()
         print("--    branch protection: can't be read with a repo-scoped token; see README > Branch protection")
+        print("--    CI secrets: can't be read with a repo-scoped token; see README > CI secrets")
         self.claude_env()
         if p.repo_id:
             self.ok(f"volumes: {p.repo_volumes}-*")
