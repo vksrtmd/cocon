@@ -6,11 +6,10 @@ Issues and pull requests are welcome. For a vulnerability, follow [SECURITY.md](
 
 - [README.md](README.md): what cocon does and how to run it.
 - [CLAUDE.md](CLAUDE.md): the working rules, written for agents but binding for everyone: layout, worktrees,
-  tests, and how a `.github/workflows/` change is pushed.
+  tests, coding and review judgement calls, and how a `.github/workflows/` change is pushed.
 - [docs/threat-model.md](docs/threat-model.md): what each trust boundary promises. A change that touches one keeps
   each promise, or updates the doc in the same PR.
-- [docs/adr/](docs/adr/): why things are the way they are. [GLOSSARY.md](GLOSSARY.md) and
-  [CODING_STANDARDS.md](CODING_STANDARDS.md) for terms and review judgement calls.
+- [docs/adr/](docs/adr/): why things are the way they are. [GLOSSARY.md](GLOSSARY.md) for terms.
 
 ## Making a change
 

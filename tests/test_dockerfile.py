@@ -200,7 +200,7 @@ DECLARES = re.compile(r"(?:^|[{(])\s*(?:(?:then|do|else)\s+)*(?:export|readonly|
 def substitution_problems(text):
     """Each export, readonly, local, declare or typeset in a RUN whose value is a command substitution, as
     `line N: why`: the builtin's own status replaces the substitution's, so a failure doesn't stop
-    the build (CODING_STANDARDS.md, Shell). Assign first, then declare: `A="$(cmd)" && export A`."""
+    the build (CLAUDE.md, Code). Assign first, then declare: `A="$(cmd)" && export A`."""
     problems = []
     for line, kw, rest in instructions(text):
         if kw != "RUN":
@@ -211,7 +211,7 @@ def substitution_problems(text):
                 if DECLARES.search(part.group()):
                     at = line + rest[:off + part.start()].count("\n")
                     problems.append(f"line {at}: export of a command substitution hides its failure from set -e "
-                                    "(CODING_STANDARDS.md, Shell): assign it first, then export")
+                                    "(CLAUDE.md, Code): assign it first, then export")
     return problems
 
 
@@ -429,7 +429,7 @@ class Substitutions(unittest.TestCase):
         text = PINNED_FROM + 'RUN true \\\n && export A="$(mktemp -d)" \\\n && true\n'
         self.assertEqual(substitution_problems(text), [
             "line 3: export of a command substitution hides its failure from set -e "
-            "(CODING_STANDARDS.md, Shell): assign it first, then export"])
+            "(CLAUDE.md, Code): assign it first, then export"])
 
     def test_assign_then_export_passes(self):
         text = PINNED_FROM + 'RUN A="$(mktemp -d)" && export A && export B=/tmp/b C="$HOME"\n'
