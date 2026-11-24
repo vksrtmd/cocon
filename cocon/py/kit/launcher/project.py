@@ -150,7 +150,7 @@ class Project:
 
     def slug_volumes(self):
         """This checkout's own volumes: the compose project's, then node_modules' last."""
-        return [f"cocon-{self.slug}_{v}" for v in ("pgdata", "chdata", "dockerdata-rootless", "docker-ca")] + \
+        return [f"cocon-{self.slug}_{v}" for v in ("pgdata", "chdata", "cassdata", "dockerdata-rootless", "docker-ca")] + \
             [f"cocon-{self.slug}-node-modules"]
 
     def check_pin(self):

@@ -8,6 +8,7 @@ services:
     build:
       context: .
       args:   # unset: the Dockerfile's default (no extra)
+        - WITH_CASSANDRA
         - WITH_CLICKHOUSE
         - WITH_DOCKER
         - WITH_GO
@@ -27,8 +28,8 @@ services:
     mem_limit: ${COCON_MEMORY:-8g}
     pids_limit: ${COCON_PIDS:-4096}
     environment:   # the proxy variables come from ./cocon: the session's broker (ADR 0014), its only way out
-      NO_PROXY: localhost,127.0.0.1,postgres,clickhouse,kafka,docker
-      no_proxy: localhost,127.0.0.1,postgres,clickhouse,kafka,docker
+      NO_PROXY: localhost,127.0.0.1,postgres,clickhouse,kafka,cassandra,docker
+      no_proxy: localhost,127.0.0.1,postgres,clickhouse,kafka,cassandra,docker
       NODE_USE_ENV_PROXY: "1"   # Node's fetch and http ignore the proxy variables without it (corepack's yarn/pnpm downloads)
       # No install scripts, no versions younger than a day, exact versions saved.
       NPM_CONFIG_IGNORE_SCRIPTS: "true"
@@ -50,6 +51,9 @@ services:
         required: false
       kafka:
         condition: service_started
+        required: false
+      cassandra:
+        condition: service_healthy
         required: false
       docker:
         condition: service_healthy
@@ -156,6 +160,20 @@ services:
       retries: 30
     networks: [internal]
 
+  cassandra:
+    profiles: [cassandra]
+    image: cassandra:5.0.9@sha256:5e996210152ab03e7e4af435ea853a6657954f1d6360ef1283f56cdbd8ad5020
+    environment:   # unset, the JVM takes a quarter of the RAM
+      MAX_HEAP_SIZE: 512M
+      HEAP_NEWSIZE: 128M
+    volumes: [cassdata:/var/lib/cassandra]
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 3s
+      retries: 20
+      start_period: 180s
+    networks: [internal]
+
   kafka:
     profiles: [kafka]
     image: apache/kafka:4.4.0@sha256:833b867a9585a141da455dc2b57431c65cbccb27f11c91f694444cca9f777e0f
@@ -237,5 +255,6 @@ volumes:              # per repo, shared by its worktrees: created by ./cocon, s
   npm:           { name: "${REPO_VOLUMES:?set by cocon}-npm", external: true }
   pgdata: {}            # per project
   chdata: {}            # per project
+  cassdata: {}          # per project
   dockerdata-rootless: {}   # per project: two daemons must not share a data dir
   docker-ca: {}         # per project: the cert of the Docker sidecar's broker

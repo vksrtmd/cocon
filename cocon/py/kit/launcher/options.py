@@ -4,7 +4,7 @@ import re
 
 from kit.util import Fail
 
-KNOWN = ("clickhouse", "docker", "go", "helm", "kafka", "playwright", "postgres", "python", "rust", "tauri")  # sorted: the tag follows
+KNOWN = ("cassandra", "clickhouse", "docker", "go", "helm", "kafka", "playwright", "postgres", "python", "rust", "tauri")  # sorted: the tag follows
 ACTIONS = {"--build": "build", "--reload-proxy": "reload", "--proxy-log": "log", "--rotate-logs": "rotate",
            "--down": "down", "--destroy": "destroy", "--doctor": "doctor", "--repin": "repin", "--trust-git": "trust",
            "--attach": "attach", "--ls": "list"}

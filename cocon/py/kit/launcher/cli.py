@@ -10,6 +10,7 @@ with your setup from $COCON_CONFIG (default ~/.claude: skills, agents, rules, se
                   cocon:<names, sorted, joined by ->, built on first use; a sidecar
                   service starts with the session:
                     postgres, clickhouse, kafka   client tools + server (user/pass/db: dev)
+                    cassandra    cqlsh + server (no auth)
                     docker       Docker CLI + a Docker daemon (dind sidecar)
                     playwright   Chromium's system libs; each launch downloads the repo's
                                  browsers into the cache volume, outside the proxy
