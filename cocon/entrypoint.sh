@@ -81,10 +81,12 @@ for file in "$repo/.claude/settings.json" "$repo/.claude/settings.local.json"; d
 done
 
 # Onboarding's connectivity check needs platform.claude.com, which the allowlist denies, and exits without it:
-# a fresh config volume starts onboarded. A config that doesn't parse is left to Claude Code's own repair.
+# a fresh config volume starts onboarded. The LSP plugins are preloaded, so Claude Code's suggestions to install
+# more are off (lspRecommendationDisabled). A config that doesn't parse is left to Claude Code's own repair.
 [[ ! -d $cfg ]] || node -e 'const fs = require("fs"), f = process.argv[1]; let c = {};
   try { c = JSON.parse(fs.readFileSync(f, "utf8")); } catch (e) { if (e.code !== "ENOENT") process.exit(); }
-  if (c.hasCompletedOnboarding !== true) fs.writeFileSync(f, JSON.stringify({...c, hasCompletedOnboarding: true}, null, 2));' \
+  if (c.hasCompletedOnboarding !== true || c.lspRecommendationDisabled !== true)
+    fs.writeFileSync(f, JSON.stringify({...c, hasCompletedOnboarding: true, lspRecommendationDisabled: true}, null, 2));' \
   "$cfg/.claude.json" || echo "cocon: could not mark onboarding done in $cfg/.claude.json" >&2
 
 [[ -n "${GIT_USER_NAME:-}"  ]] && git config --global user.name  "$GIT_USER_NAME"
@@ -98,7 +100,7 @@ fi
 # Inject container notes into Claude's system prompt when launching claude.
 if [[ "${1:-}" == "claude" ]]; then
   shift
-  # The vendored LSP plugins (image-owned) whose server is on PATH, unless the volume has it installed at user scope (a local or project install is for one worktree).
+  # The LSP plugins (image-owned) whose server is on PATH, unless the volume has it installed at user scope (a local or project install is for one worktree).
   plugin_dirs=()
   for dir in /opt/cocon/lsp-plugins/*/; do
     dir=${dir%/}

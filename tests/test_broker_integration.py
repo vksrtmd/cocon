@@ -493,9 +493,9 @@ for p in filter(str.isdigit, os.listdir("/proc")):
             sh("docker", "run", "--rm", "-v", f"{P}-cfg:/home/claude/.claude", "--entrypoint", "sh", self.dev_image(),
                "-c", f"echo '{text}' >{f}")
         put('{"userID": "u", "hasCompletedOnboarding": false}')
-        self.assertEqual(config(), {"userID": "u", "hasCompletedOnboarding": True})
+        self.assertEqual(config(), {"userID": "u", "hasCompletedOnboarding": True, "lspRecommendationDisabled": True})
         sh("docker", "run", "--rm", "-v", f"{P}-cfg:/home/claude/.claude", "--entrypoint", "rm", self.dev_image(), f)
-        self.assertEqual(config(), {"hasCompletedOnboarding": True})
+        self.assertEqual(config(), {"hasCompletedOnboarding": True, "lspRecommendationDisabled": True})
         put("{broken")
         self.assertIn("{broken\n", self.dev(cmd=["cat", f], cfg=f"{P}-cfg"))
 

@@ -1,7 +1,6 @@
-# Vendored LSP plugins
+# LSP plugins
 
-`typescript-lsp`, `gopls-lsp`, `rust-analyzer-lsp` and `pyright-lsp`, copied verbatim (`.claude-plugin/plugin.json`
-and `LICENSE`, Apache-2.0) from `plugins/<name>/` of
-[anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official) at commit
-`5cec6716767283f4675a05f5f8855b5b49c81783`. Each is a manifest naming a language server, no code.
-`cocon/entrypoint.sh` passes `--plugin-dir` for one whose server `command` is on PATH.
+`typescript-lsp` and `pyright-lsp`: cocon's own manifests (`.claude-plugin/plugin.json`, no code), each naming a
+language server. Their names mirror the official marketplace's `typescript-lsp` and `pyright-lsp`, so a volume that
+installed one is recognised. `cocon/entrypoint.sh` passes `--plugin-dir` for one whose server `command` is on PATH
+and which isn't installed at user scope.

@@ -250,8 +250,8 @@ These do their job and exit without starting a session. `cocon --help` lists eve
 
 Images, Claude Code and npm/Go tools are pinned in `cocon/`; apt packages are not. Claude Code, TypeScript,
 its language server and Pyright install from a lockfile (`cocon/npm-tools/`), dependencies included, with install scripts off
-except Claude Code's. Claude Code loads the official TypeScript, Python, Go and Rust language-server plugins,
-vendored in `cocon/claude/lsp-plugins/`, for each server the image has (Go and Rust come with their extras).
+except Claude Code's. Claude Code loads TypeScript and Python language-server plugins (cocon's manifests in
+`cocon/claude/lsp-plugins/`) when the image has the server, and its LSP plugin suggestions are off.
 
 ## Configuration reference
 

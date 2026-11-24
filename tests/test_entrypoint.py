@@ -146,6 +146,20 @@ class Entrypoint(unittest.TestCase):
         for bad in ("\u202e", "\u200b", "\u2066"):
             self.assertNotIn(bad, r.stderr)
 
+    def test_a_config_starts_onboarded_with_lsp_suggestions_off_and_keeps_the_rest(self):
+        f = self.cfg / ".claude.json"
+        want = {"hasCompletedOnboarding": True, "lspRecommendationDisabled": True}
+        self.run_entry()
+        self.assertEqual(json.loads(f.read_text()), want)
+        self.write(f, {"userID": "u", "hasCompletedOnboarding": True})
+        self.run_entry()
+        self.assertEqual(json.loads(f.read_text()), {"userID": "u", **want})
+
+    def test_a_config_that_does_not_parse_is_left_alone(self):
+        self.write(self.cfg / ".claude.json", "{broken")
+        self.run_entry()
+        self.assertEqual((self.cfg / ".claude.json").read_text(), "{broken")
+
     LSP = KIT / "claude" / "lsp-plugins"
 
     def claude_args(self, *servers, installed=None, scope="user"):
@@ -162,10 +176,10 @@ class Entrypoint(unittest.TestCase):
     def dirs(self, line):
         return [w for w in line.split() if w.startswith(f"{self.opt}/lsp-plugins/")]
 
-    def test_claude_loads_each_vendored_lsp_plugin_whose_server_is_on_path(self):
+    def test_claude_loads_each_lsp_plugin_whose_server_is_on_path(self):
         self.stage_lsp()
-        line = self.claude_args("typescript-language-server", "gopls")
-        self.assertEqual(self.dirs(line), [f"{self.opt}/lsp-plugins/gopls-lsp", f"{self.opt}/lsp-plugins/typescript-lsp"])
+        line = self.claude_args("typescript-language-server", "pyright-langserver", "gopls")
+        self.assertEqual(self.dirs(line), [f"{self.opt}/lsp-plugins/pyright-lsp", f"{self.opt}/lsp-plugins/typescript-lsp"])
         self.assertTrue(line.endswith("-p hi"), line)
 
     def test_claude_loads_no_lsp_plugin_when_no_server_is_on_path(self):
@@ -174,32 +188,31 @@ class Entrypoint(unittest.TestCase):
 
     def test_claude_skips_an_lsp_plugin_the_volume_has_installed(self):
         self.stage_lsp()
-        line = self.claude_args("gopls", "pyright-langserver", installed=["gopls-lsp@claude-plugins-official"])
+        line = self.claude_args("typescript-language-server", "pyright-langserver", installed=["typescript-lsp@claude-plugins-official"])
         self.assertEqual(self.dirs(line), [f"{self.opt}/lsp-plugins/pyright-lsp"])
 
     def test_claude_still_loads_an_lsp_plugin_the_volume_has_installed_at_local_scope_only(self):
         self.stage_lsp()
-        line = self.claude_args("gopls", installed=["gopls-lsp@claude-plugins-official"], scope="local")
-        self.assertEqual(self.dirs(line), [f"{self.opt}/lsp-plugins/gopls-lsp"])
+        line = self.claude_args("pyright-langserver", installed=["pyright-lsp@claude-plugins-official"], scope="local")
+        self.assertEqual(self.dirs(line), [f"{self.opt}/lsp-plugins/pyright-lsp"])
 
     def test_claude_gets_tmp_as_a_working_directory(self):
         self.assertIn(" --add-dir /tmp ", f" {self.claude_args()} ")
 
     def test_another_command_gets_no_plugin_dir(self):
         self.stage_lsp()
-        self.stub("gopls")
+        self.stub("pyright-langserver")
         r = self.run_entry("echo", "--plugin-dir")
         self.assertEqual(r.stdout, "--plugin-dir\n")
         self.assertEqual(self.calls(), [])
 
-    def test_the_vendored_manifests_name_a_server_command_and_their_license(self):
+    def test_the_manifests_name_a_server_command(self):
         names = sorted(p.name for p in self.LSP.iterdir() if p.is_dir())
-        self.assertEqual(names, ["gopls-lsp", "pyright-lsp", "rust-analyzer-lsp", "typescript-lsp"])
+        self.assertEqual(names, ["pyright-lsp", "typescript-lsp"])
         for n in names:
             m = json.loads((self.LSP / n / ".claude-plugin" / "plugin.json").read_text())
             self.assertEqual(m["name"], n)
             self.assertTrue(all(s["command"] for s in m["lspServers"].values()))
-            self.assertIn("Apache License", (self.LSP / n / "LICENSE").read_text())
 
     def stage_lsp(self):
         shutil.copytree(self.LSP, self.opt / "lsp-plugins")

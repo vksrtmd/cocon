@@ -243,7 +243,7 @@ FROM tauri AS final
 # Claude Code policy + entrypoint: often edited, so here, after the extras, an edit rebuilds none of them.
 COPY claude/managed-settings.json /etc/claude-code/managed-settings.json
 COPY claude/container-notes.md /opt/cocon/container-notes.md
-# Language servers as Claude Code plugins, vendored from the official marketplace (claude/lsp-plugins/README.md); the entrypoint loads those whose server is on PATH.
+# Language servers as Claude Code plugins, cocon's manifests (claude/lsp-plugins/README.md); the entrypoint loads those whose server is on PATH.
 COPY claude/lsp-plugins /opt/cocon/lsp-plugins
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/cocon-entrypoint
 # No setuid or setgid files (su, mount, passwd...): inert under no-new-privileges and no
