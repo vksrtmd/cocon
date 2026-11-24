@@ -32,10 +32,10 @@ jobs:
       - name: extras tools start
         if: steps.changed.outputs.dockerfile
         run: |
-          COCON_TAG=all WITH_CLICKHOUSE=1 WITH_DOCKER=1 WITH_GO=1 WITH_HELM=1 WITH_KAFKA=1 \
+          COCON_TAG=all WITH_CASSANDRA=1 WITH_CLICKHOUSE=1 WITH_DOCKER=1 WITH_GO=1 WITH_HELM=1 WITH_KAFKA=1 \
             WITH_PLAYWRIGHT=1 WITH_POSTGRES=1 WITH_PYTHON=1 WITH_RUST=1 WITH_TAURI=1 docker compose -f cocon/compose.yml build dev
           docker run --rm --entrypoint bash cocon:all -c \
-            'psql --version && kcat -V && clickhouse-client --version && docker --version && uv --version \
+            'psql --version && kcat -V && clickhouse-client --version && cqlsh --version && docker --version && uv --version \
               && cargo --version && cmake --version && go version && gopls version && helm version \
               && protoc --version && test -f /usr/local/include/google/protobuf/timestamp.proto && cargo nextest --version \
               && test "$(command -v cargo)" = /usr/local/lib/cocon/cargo/cargo \
