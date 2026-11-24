@@ -89,7 +89,24 @@ fi
 # Inject container notes into Claude's system prompt when launching claude.
 if [[ "${1:-}" == "claude" ]]; then
   shift
-  exec claude --append-system-prompt "$(cat /opt/cocon/container-notes.md)" "$@"
+  # The vendored LSP plugins (image-owned) whose server is on PATH, unless the volume has the plugin installed.
+  plugin_dirs=()
+  installed=$(jq -r '.plugins | keys[]' "$cfg/plugins/installed_plugins.json" 2>/dev/null || true)
+  for dir in /opt/cocon/lsp-plugins/*/; do
+    dir=${dir%/}
+    [[ -f $dir/.claude-plugin/plugin.json ]] || continue
+    plugin=$(jq -r '.name' "$dir/.claude-plugin/plugin.json") || continue
+    server=$(jq -r '.lspServers[].command' "$dir/.claude-plugin/plugin.json") || continue
+    # Every server the plugin names must be there.
+    ok=1
+    while read -r cmd; do
+      command -v "$cmd" >/dev/null || ok=0
+    done <<<"$server"
+    [[ $ok == 1 ]] || continue
+    ! grep -q "^$plugin@" <<<"$installed" || continue
+    plugin_dirs+=(--plugin-dir "$dir")
+  done
+  exec claude "${plugin_dirs[@]}" --append-system-prompt "$(cat /opt/cocon/container-notes.md)" "$@"
 fi
 
 exec "$@"

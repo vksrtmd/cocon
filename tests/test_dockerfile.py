@@ -157,9 +157,10 @@ def download_problems(text):
 def install_script_problems(lock, manifest, dockerfile):
     """Where the lockfile's packages with an install script, package.json's allowScripts and the
     packages the Dockerfile's `npm rebuild` runs scripts for disagree: each scripted package must be
-    allowed, and the allowed ones are exactly the rebuilt ones."""
+    allowed, and the allowed ones are exactly the rebuilt ones. A package limited to other systems (fsevents)
+    never installs in the Linux image, so it needs neither."""
     scripted = {key.rpartition("node_modules/")[2] for key, pkg in lock["packages"].items()
-                if pkg.get("hasInstallScript")}
+                if pkg.get("hasInstallScript") and "linux" in pkg.get("os", ["linux"])}
     allowed = set(manifest.get("allowScripts", {}))
     m = re.search(r"\bnpm rebuild\b([^&|;\n]*)", dockerfile.replace("\\\n", " "))
     rebuilt = {w for w in m.group(1).split() if not w.startswith("-")} if m else set()
@@ -357,6 +358,12 @@ class InstallScripts(unittest.TestCase):
         self.assertEqual(install_script_problems(json.loads((tools / "package-lock.json").read_text()),
                                                  json.loads((tools / "package.json").read_text()),
                                                  (KIT / "Dockerfile").read_text()), [])
+
+    def test_a_scripted_package_that_never_installs_on_linux_needs_no_allowance(self):
+        lock = {"packages": {"node_modules/mac": {"hasInstallScript": True, "optional": True, "os": ["darwin"]},
+                             "node_modules/both": {"hasInstallScript": True, "os": ["darwin", "linux"]}}}
+        self.assertEqual(install_script_problems(lock, {}, ""),
+                         ["both has an install script but isn't in package.json's allowScripts"])
 
     def test_matching_lists_pass(self):
         manifest = {"allowScripts": {"a": True, "c": True}}

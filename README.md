@@ -248,9 +248,10 @@ These do their job and exit without starting a session. `cocon --help` lists eve
 | `--trust-git` | trust the risky git config entries added since the trusted baseline |
 | `--destroy` | `--down`, then remove the repo's volumes; asks first |
 
-Images, Claude Code and npm/Go tools are pinned in `cocon/`; apt packages are not. Claude Code, TypeScript and
-its language server install from a lockfile (`cocon/npm-tools/`), dependencies included, with install scripts off
-except Claude Code's.
+Images, Claude Code and npm/Go tools are pinned in `cocon/`; apt packages are not. Claude Code, TypeScript,
+its language server and Pyright install from a lockfile (`cocon/npm-tools/`), dependencies included, with install scripts off
+except Claude Code's. Claude Code loads the official TypeScript, Python, Go and Rust language-server plugins,
+vendored in `cocon/claude/lsp-plugins/`, for each server the image has (Go and Rust come with their extras).
 
 ## Configuration reference
 

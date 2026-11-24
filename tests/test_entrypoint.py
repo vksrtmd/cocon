@@ -35,6 +35,10 @@ class Entrypoint(unittest.TestCase):
             assert old in text, old
             text = text.replace(old, new)
         (self.tmp / "entrypoint.sh").write_text(text)
+        # PATH holds only what the entrypoint runs, so a language server on this machine doesn't count.
+        for tool in ("seq", "sleep", "cat", "mktemp", "rm", "cp", "git", "jq", "grep", "node", "dirname", "uname", "true", "echo"):
+            if shutil.which(tool):
+                (self.tmp / "bin" / tool).symlink_to(shutil.which(tool))
         self.stub("claude")
 
     def stub(self, name):
@@ -48,8 +52,8 @@ class Entrypoint(unittest.TestCase):
     def run_entry(self, *cmd):
         env = {k: v for k, v in os.environ.items() if k not in ("GH_TOKEN", "GIT_USER_NAME", "GIT_USER_EMAIL")}
         env.update(HOME=str(self.tmp / "home"), CLAUDE_CONFIG_DIR=str(self.cfg), STUB_LOG=str(self.log),
-                   PATH=f"{self.tmp / 'bin'}:{os.environ['PATH']}")
-        r = subprocess.run(["bash", str(self.tmp / "entrypoint.sh"), *(cmd or ("true",))], cwd=self.repo, env=env,
+                   PATH=str(self.tmp / "bin"))
+        r = subprocess.run([shutil.which("bash"), str(self.tmp / "entrypoint.sh"), *(cmd or ("true",))], cwd=self.repo, env=env,
                            capture_output=True, text=True, timeout=60)
         self.assertEqual(r.returncode, 0, r.stderr)
         return r
@@ -109,6 +113,55 @@ class Entrypoint(unittest.TestCase):
         r = self.run_entry("echo", "started")
         self.assertIn(f"can't read the plugins in {self.repo}/.claude/settings.local.json; skipping it", r.stderr)
         self.assertEqual(r.stdout, "started\n")
+
+    LSP = KIT / "claude" / "lsp-plugins"
+
+    def claude_args(self, *servers, installed=None):
+        for s in servers:
+            self.stub(s)
+        if installed:
+            (self.cfg / "plugins").mkdir(exist_ok=True)
+            self.write(self.cfg / "plugins" / "installed_plugins.json", {"plugins": {k: [{}] for k in installed}})
+        self.run_entry("claude", "-p", "hi")
+        (line,) = self.calls()
+        return line
+
+    def dirs(self, line):
+        return [w for w in line.split() if w.startswith(f"{self.opt}/lsp-plugins/")]
+
+    def test_claude_loads_each_vendored_lsp_plugin_whose_server_is_on_path(self):
+        self.stage_lsp()
+        line = self.claude_args("typescript-language-server", "gopls")
+        self.assertEqual(self.dirs(line), [f"{self.opt}/lsp-plugins/gopls-lsp", f"{self.opt}/lsp-plugins/typescript-lsp"])
+        self.assertTrue(line.endswith("-p hi"), line)
+
+    def test_claude_loads_no_lsp_plugin_when_no_server_is_on_path(self):
+        self.stage_lsp()
+        self.assertEqual(self.dirs(self.claude_args()), [])
+
+    def test_claude_skips_an_lsp_plugin_the_volume_has_installed(self):
+        self.stage_lsp()
+        line = self.claude_args("gopls", "pyright-langserver", installed=["gopls-lsp@claude-plugins-official"])
+        self.assertEqual(self.dirs(line), [f"{self.opt}/lsp-plugins/pyright-lsp"])
+
+    def test_another_command_gets_no_plugin_dir(self):
+        self.stage_lsp()
+        self.stub("gopls")
+        r = self.run_entry("echo", "--plugin-dir")
+        self.assertEqual(r.stdout, "--plugin-dir\n")
+        self.assertEqual(self.calls(), [])
+
+    def test_the_vendored_manifests_name_a_server_command_and_their_license(self):
+        names = sorted(p.name for p in self.LSP.iterdir() if p.is_dir())
+        self.assertEqual(names, ["gopls-lsp", "pyright-lsp", "rust-analyzer-lsp", "typescript-lsp"])
+        for n in names:
+            m = json.loads((self.LSP / n / ".claude-plugin" / "plugin.json").read_text())
+            self.assertEqual(m["name"], n)
+            self.assertTrue(all(s["command"] for s in m["lspServers"].values()))
+            self.assertIn("Apache License", (self.LSP / n / "LICENSE").read_text())
+
+    def stage_lsp(self):
+        shutil.copytree(self.LSP, self.opt / "lsp-plugins")
 
 
 if __name__ == "__main__":
