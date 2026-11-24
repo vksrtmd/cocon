@@ -253,11 +253,35 @@ class HostGuard(KitCase):
                 (d / f).write_text("a\n")
         self.assertQuiet(self.files_session(d, act))
 
+    def test_files_claude_scheduler_lock_isnt_an_entry_point_but_its_durable_tasks_are(self):
+        # Claude Code's cron scheduler writes the lock in every session that schedules a task; the host never runs
+        # it. scheduled_tasks.json holds durable tasks whose prompts host Claude runs: it stays reported.
+        d = self.entry_dir()
+
+        def act():
+            for f in (".claude/scheduled_tasks.lock", ".claude/scheduled_tasks.json"):
+                (d / f).write_text("a\n")
+        self.assertPaths(self.files_session(d, act), f"{d}/.claude/scheduled_tasks.json")
+
     def test_files_no_entry_points_stays_quiet_and_so_does_an_unchanged_run(self):
         empty = self.tmp / "empty"
         empty.mkdir()
         self.assertQuiet(self.files_session(empty, lambda: None))
         self.assertQuiet(self.files_session(self.entry_dir(), lambda: None))
+
+    def test_files_a_scheduler_lock_that_is_a_symlink_is_reported(self):
+        d, outside = self.entry_dir(), self.tmp / "outside"
+        outside.write_text("a\n")
+        self.assertPaths(self.files_session(d, lambda: (d / ".claude/scheduled_tasks.lock").symlink_to(outside)),
+                         f"{d}/.claude/scheduled_tasks.lock")
+
+    def test_files_a_scheduler_lock_that_is_a_directory_is_reported_with_its_contents(self):
+        d = self.entry_dir()
+
+        def act():
+            (d / ".claude/scheduled_tasks.lock").mkdir()
+            (d / ".claude/scheduled_tasks.lock/x").write_text("a\n")
+        self.assertPaths(self.files_session(d, act), f"{d}/.claude/scheduled_tasks.lock/x")
 
     def test_files_a_symlink_counts_by_its_target_path_not_its_content(self):
         d, outside = self.entry_dir(), self.tmp / "outside"

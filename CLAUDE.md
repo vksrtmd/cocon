@@ -12,6 +12,7 @@ cocon/py/kit/          the commands' Python 3.9: launcher/ (docs/agents/launcher
                        guard/ (host-guard), workflowpush/
 cocon/                 Dockerfile, compose.yml, squid/, broker/, entrypoint.sh, npm-tools/ (the image's npm lockfile)
 cocon/claude/          container-notes.md: the system prompt every session gets, baked into the image (reaches sessions after --build)
+cocon/claude/lsp-plugins/  cocon's LSP plugin manifests (TypeScript, Python), loaded by the entrypoint with --plugin-dir
 tests/                 Python unittest suites for the kit (ADR 0013); check.sh runs them, ci.vars is what CI sets for compose.yml
 ```
 

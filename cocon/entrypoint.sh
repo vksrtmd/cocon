@@ -30,40 +30,63 @@ if [[ -f /opt/cocon/settings.json ]]; then
   cp /opt/cocon/settings.json "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 fi
 
-# Plugins as code: add declared marketplaces and install enabled plugins this volume
-# lacks, from the user settings and the repo's own .claude/settings{,.local}.json
-# (per-repo plugins). Only does network work on a fresh volume or after a settings
-# file gains one.
+# Plugins as code, user scope only: add the marketplaces and install the enabled plugins this volume lacks, from
+# the user's settings.json as mounted (the kit-controlled file; the volume's copy is the session's to write, so
+# without the mount nothing installs), with a fixed scope and path: nothing the session writes decides what is
+# installed. Only does network work on a fresh volume or after the file gains one.
 cfg=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
 repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-for entry in "user $cfg/settings.json" "project $repo/.claude/settings.json" "local $repo/.claude/settings.local.json"; do
-  read -r scope file <<<"$entry"
-  [[ -f $file ]] || continue
-  # The session can write the repo's files: one that doesn't parse, or has the wrong shape, is skipped, not fatal.
+# installed: every plugin the volume has; user_installed: those with a user-scope install. Read again after the
+# installs, which change them.
+read_installed() {
+  installed=$(jq -r '.plugins | keys[]' "$cfg/plugins/installed_plugins.json" 2>/dev/null || true)
+  user_installed=$(jq -r '.plugins | to_entries[] | select(any(.value[]; .scope == "user")) | .key' \
+    "$cfg/plugins/installed_plugins.json" 2>/dev/null || true)
+}
+read_installed
+file=/opt/cocon/settings.json
+if [[ -f $file ]]; then
   if ! markets=$(jq -r '.extraKnownMarketplaces // {} | to_entries[] |
       "\(.key) \(.value.source.repo // .value.source.url // "")"' "$file") ||
     ! enabled=$(jq -r '.enabledPlugins // {} | to_entries[] | select(.value) | .key' "$file"); then
     echo "cocon: can't read the plugins in $file; skipping it" >&2
-    continue
+  else
+    known=$(jq -r 'keys[]' "$cfg/plugins/known_marketplaces.json" 2>/dev/null || true)
+    while read -r name src; do
+      [[ -n $name ]] || continue
+      grep -qxF "$name" <<<"$known" || [[ -z $src ]] ||
+        claude plugin marketplace add "$src" >/dev/null || echo "cocon: could not add marketplace $name" >&2
+    done <<<"$markets"
+    for p in $enabled; do
+      grep -qxF "$p" <<<"$installed" ||
+        claude plugin install "$p" -s user >/dev/null || echo "cocon: could not install plugin $p (user)" >&2
+    done
   fi
-  known=$(jq -r 'keys[]' "$cfg/plugins/known_marketplaces.json" 2>/dev/null || true)
-  while read -r name src; do
-    [[ -n $name ]] || continue
-    grep -qxF "$name" <<<"$known" || [[ -z $src ]] ||
-      claude plugin marketplace add "$src" >/dev/null || echo "cocon: could not add marketplace $name" >&2
-  done <<<"$markets"
-  installed=$(jq -r '.plugins | keys[]' "$cfg/plugins/installed_plugins.json" 2>/dev/null || true)
-  for p in $enabled; do
-    grep -qxF "$p" <<<"$installed" ||
-      (cd "$repo" && claude plugin install "$p" -s "$scope" >/dev/null) || echo "cocon: could not install plugin $p ($scope)" >&2
-  done
+fi
+
+read_installed
+# The repo's own settings files are written by contributors and by the session itself: they install nothing here.
+# A plugin one enables that the volume lacks is named in one warning line; the names are the session's text, so
+# they go out as JSON strings, with the DEL and C1 control characters JSON leaves alone, and zero-width and bidi characters, replaced.
+for file in "$repo/.claude/settings.json" "$repo/.claude/settings.local.json"; do
+  [[ -f $file ]] || continue
+  if ! missing=$(jq -r --arg installed "$installed" '(.enabledPlugins // {}) | to_entries
+      | map(select(.value) | .key | select(IN($installed | split("\n")[]) | not)
+        | tojson | gsub("[\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]"; "?")) | join(", ")' "$file" 2>/dev/null); then
+    echo "cocon: can't read the plugins in $file; skipping it" >&2
+  elif [[ -n $missing ]]; then
+    echo "cocon: $file enables plugins this volume lacks: $missing; cocon doesn't install repo-declared plugins" \
+      "(in a session: claude plugin install <id> --scope local|project, which then stays in the volume)" >&2
+  fi
 done
 
 # Onboarding's connectivity check needs platform.claude.com, which the allowlist denies, and exits without it:
-# a fresh config volume starts onboarded. A config that doesn't parse is left to Claude Code's own repair.
+# a fresh config volume starts onboarded. The LSP plugins are preloaded, so Claude Code's suggestions to install
+# more are off (lspRecommendationDisabled). A config that doesn't parse is left to Claude Code's own repair.
 [[ ! -d $cfg ]] || node -e 'const fs = require("fs"), f = process.argv[1]; let c = {};
   try { c = JSON.parse(fs.readFileSync(f, "utf8")); } catch (e) { if (e.code !== "ENOENT") process.exit(); }
-  if (c.hasCompletedOnboarding !== true) fs.writeFileSync(f, JSON.stringify({...c, hasCompletedOnboarding: true}, null, 2));' \
+  if (c.hasCompletedOnboarding !== true || c.lspRecommendationDisabled !== true)
+    fs.writeFileSync(f, JSON.stringify({...c, hasCompletedOnboarding: true, lspRecommendationDisabled: true}, null, 2));' \
   "$cfg/.claude.json" || echo "cocon: could not mark onboarding done in $cfg/.claude.json" >&2
 
 [[ -n "${GIT_USER_NAME:-}"  ]] && git config --global user.name  "$GIT_USER_NAME"
@@ -77,7 +100,25 @@ fi
 # Inject container notes into Claude's system prompt when launching claude.
 if [[ "${1:-}" == "claude" ]]; then
   shift
-  exec claude --append-system-prompt "$(cat /opt/cocon/container-notes.md)" "$@"
+  # The LSP plugins (image-owned) whose server is on PATH, unless the volume has it installed at user scope (a local or project install is for one worktree).
+  plugin_dirs=()
+  for dir in /opt/cocon/lsp-plugins/*/; do
+    dir=${dir%/}
+    [[ -f $dir/.claude-plugin/plugin.json ]] || continue
+    plugin=$(jq -r '.name' "$dir/.claude-plugin/plugin.json") || continue
+    server=$(jq -r '.lspServers[].command' "$dir/.claude-plugin/plugin.json") || continue
+    # Every server the plugin names must be there.
+    ok=1
+    while read -r cmd; do
+      command -v "$cmd" >/dev/null || ok=0
+    done <<<"$server"
+    [[ $ok == 1 ]] || continue
+    ! grep -q "^$plugin@" <<<"$user_installed" || continue
+    plugin_dirs+=(--plugin-dir "$dir")
+  done
+  # ${arr[@]+...}: bash < 4.4 under set -u fails on an empty array. /tmp is the container's own scratch (Claude Code's
+  # background task outputs live there), so reads from it need no prompt.
+  exec claude ${plugin_dirs[@]+"${plugin_dirs[@]}"} --add-dir /tmp --append-system-prompt "$(cat /opt/cocon/container-notes.md)" "$@"
 fi
 
 exec "$@"

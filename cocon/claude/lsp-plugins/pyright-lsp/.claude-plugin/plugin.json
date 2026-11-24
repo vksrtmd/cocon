@@ -1,0 +1,14 @@
+{
+  "name": "pyright-lsp",
+  "description": "Python language server (Pyright)",
+  "lspServers": {
+    "pyright": {
+      "command": "pyright-langserver",
+      "args": ["--stdio"],
+      "extensionToLanguage": {
+        ".py": "python",
+        ".pyi": "python"
+      }
+    }
+  }
+}

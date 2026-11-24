@@ -248,9 +248,10 @@ These do their job and exit without starting a session. `cocon --help` lists eve
 | `--trust-git` | trust the risky git config entries added since the trusted baseline |
 | `--destroy` | `--down`, then remove the repo's volumes; asks first |
 
-Images, Claude Code and npm/Go tools are pinned in `cocon/`; apt packages are not. Claude Code, TypeScript and
-its language server install from a lockfile (`cocon/npm-tools/`), dependencies included, with install scripts off
-except Claude Code's.
+Images, Claude Code and npm/Go tools are pinned in `cocon/`; apt packages are not. Claude Code, TypeScript,
+its language server and Pyright install from a lockfile (`cocon/npm-tools/`), dependencies included, with install scripts off
+except Claude Code's. Claude Code loads TypeScript and Python language-server plugins (cocon's manifests in
+`cocon/claude/lsp-plugins/`) when the image has the server, and its LSP plugin suggestions are off.
 
 ## Configuration reference
 
@@ -264,10 +265,12 @@ The launcher mounts these from `COCON_CONFIG`, whichever exist; missing ones are
 | `settings.json` | **copied over** the cocoon's settings at every start |
 | `CLAUDE.md` | **not mounted** |
 
-- At start the cocoon adds missing marketplaces and installs missing enabled plugins into the repo's config volume.
+- At start the cocoon adds the marketplaces and installs the enabled plugins your `settings.json` declares, into the repo's config volume.
 - Changes made in-session with `/config` or `/plugin` are lost at the next start.
-- Repo-only plugins: `claude plugin install <id> --scope local` (personal,
-  `.claude/settings.local.json`) or `--scope project` (shared, `.claude/settings.json`).
+- Repo-only plugins: cocon doesn't install them at start, because the repo's settings files are written by its
+  contributors and by the session. It warns about each file that enables one the volume lacks; install it in the
+  session with `claude plugin install <id> --scope local` (personal, `.claude/settings.local.json`) or
+  `--scope project` (shared, `.claude/settings.json`), and it stays in the volume.
 - Edits take effect on restart.
 
 ### Allowlist
@@ -367,7 +370,7 @@ The repo is writable and changes land on the host. cocon closes or reports these
     `core.hooksPath`, filters, `!` aliases, `include.path`...) or send its traffic and credentials elsewhere
     (any `http.*`, `remote.*.proxy`).
   - host entry points added, removed or changed: `.husky/`, lefthook config, `.pre-commit-config.yaml`,
-    `.claude/` (not `.claude/worktrees/`), `.mcp.json`.
+    `.claude/` (not `.claude/worktrees/` or Claude Code's `.claude/scheduled_tasks.lock`), `.mcp.json`.
 - **Host git is guarded:** the launcher and `workflow-push` run git through `host-guard git`, which refuses while
   an untrusted risky config entry is set (`--trust-git`), a worktree's pointer files disagree, or `origin`
   no longer matches the pinned repo ID (`--repin`).

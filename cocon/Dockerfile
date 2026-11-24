@@ -68,7 +68,7 @@ COPY --from=go-tools /out/actionlint /usr/local/bin/actionlint
 COPY --from=npm-tools /npm-tools /usr/local/lib/cocon-npm
 # Node 25+ no longer bundles corepack, so it comes from the lockfile too.
 # ln -s would make a dangling link for a tool the lockfile lost: fail the build instead.
-RUN for b in claude corepack tsc typescript-language-server; do \
+RUN for b in claude corepack tsc typescript-language-server pyright-langserver; do \
       t="/usr/local/lib/cocon-npm/node_modules/.bin/$b"; test -x "$t" || { echo "$t missing" >&2; exit 1; }; \
       ln -s "$t" /usr/local/bin/; done \
  && corepack enable --install-directory /usr/local/bin
@@ -243,6 +243,8 @@ FROM tauri AS final
 # Claude Code policy + entrypoint: often edited, so here, after the extras, an edit rebuilds none of them.
 COPY claude/managed-settings.json /etc/claude-code/managed-settings.json
 COPY claude/container-notes.md /opt/cocon/container-notes.md
+# Language servers as Claude Code plugins, cocon's manifests (claude/lsp-plugins/README.md); the entrypoint loads those whose server is on PATH.
+COPY claude/lsp-plugins /opt/cocon/lsp-plugins
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/cocon-entrypoint
 # No setuid or setgid files (su, mount, passwd...): inert under no-new-privileges and no
 # capabilities, and kept out so a change to either can't open a root path. Last root step, after
