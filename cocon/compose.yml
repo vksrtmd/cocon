@@ -164,14 +164,13 @@ services:
     profiles: [cassandra]
     image: cassandra:5.0.9@sha256:5e996210152ab03e7e4af435ea853a6657954f1d6360ef1283f56cdbd8ad5020
     environment:   # unset, the JVM takes a quarter of the RAM
-      MAX_HEAP_SIZE: 512M
-      HEAP_NEWSIZE: 128M
+      MAX_HEAP_SIZE: 512M   # G1: the young generation sizes itself, so no HEAP_NEWSIZE
     volumes: [cassdata:/var/lib/cassandra]
     healthcheck:
-      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
-      interval: 3s
-      retries: 20
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]   # a cqlsh start costs ~0.4 s of CPU
       start_period: 180s
+      start_interval: 3s
+      interval: 30s
     networks: [internal]
 
   kafka:

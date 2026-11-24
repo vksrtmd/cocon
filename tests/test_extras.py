@@ -39,6 +39,14 @@ class Extras(unittest.TestCase):
         args = re.findall(r"WITH_([A-Z0-9_]*)=1", read(".github/workflows/cocon.yml"))
         self.assertEqual(norm(args), self.known)
 
+    def test_destroy_names_every_per_project_volume(self):
+        """`--destroy` removes slug_volumes(); a compose volume missing from it would outlive the checkout."""
+        top_volumes = re.split(r"^volumes:", (KIT / "compose.yml").read_text(), flags=re.M)[1]
+        compose = re.findall(r"^  ([a-z0-9-]+): \{\}", top_volumes, re.M)
+        m = re.search(r"def slug_volumes.*?for v in \(([^)]*)\)", (KIT / "py/kit/launcher/project.py").read_text(), re.S)
+        self.assertTrue(m, "no `for v in (...)` in Project.slug_volumes")
+        self.assertEqual(sorted(re.findall(r'"([^"]+)"', m.group(1))), sorted(compose))
+
     def test_compose_profiles_are_extras(self):
         for p in re.findall(r"^ *profiles: \[([a-z0-9]*)\]$", (KIT / "compose.yml").read_text(), re.M):
             self.assertTrue(p == "ports" or p in self.known, f"compose profile {p} isn't an extra")

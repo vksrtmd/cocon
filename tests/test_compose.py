@@ -58,7 +58,7 @@ class Compose(unittest.TestCase):
     def test_cassandra_sidecar_is_on_the_internal_network_only_with_its_heap_capped(self):
         cass = json.loads(config("--format", "json").stdout)["services"]["cassandra"]
         self.assertEqual(set(cass["networks"]), {"internal"})
-        self.assertEqual((cass["environment"]["MAX_HEAP_SIZE"], cass["environment"]["HEAP_NEWSIZE"]), ("512M", "128M"))
+        self.assertEqual(cass["environment"]["MAX_HEAP_SIZE"], "512M")
 
     def test_dev_has_no_root_path(self):
         """The session: no capabilities, no-new-privileges, no privileged mode, devices or added capability; its user
