@@ -30,33 +30,45 @@ if [[ -f /opt/cocon/settings.json ]]; then
   cp /opt/cocon/settings.json "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 fi
 
-# Plugins as code: add declared marketplaces and install enabled plugins this volume
-# lacks, from the user settings and the repo's own .claude/settings{,.local}.json
-# (per-repo plugins). Only does network work on a fresh volume or after a settings
-# file gains one.
+# Plugins as code, user scope only: add the marketplaces and install the enabled plugins this volume lacks, from
+# the user's settings.json above (the kit-controlled file), with a fixed scope and path: nothing the session writes
+# decides what is installed. Only does network work on a fresh volume or after the file gains one.
 cfg=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
 repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-for entry in "user $cfg/settings.json" "project $repo/.claude/settings.json" "local $repo/.claude/settings.local.json"; do
-  read -r scope file <<<"$entry"
-  [[ -f $file ]] || continue
-  # The session can write the repo's files: one that doesn't parse, or has the wrong shape, is skipped, not fatal.
+installed=$(jq -r '.plugins | keys[]' "$cfg/plugins/installed_plugins.json" 2>/dev/null || true)
+file=$cfg/settings.json
+if [[ -f $file ]]; then
   if ! markets=$(jq -r '.extraKnownMarketplaces // {} | to_entries[] |
       "\(.key) \(.value.source.repo // .value.source.url // "")"' "$file") ||
     ! enabled=$(jq -r '.enabledPlugins // {} | to_entries[] | select(.value) | .key' "$file"); then
     echo "cocon: can't read the plugins in $file; skipping it" >&2
-    continue
+  else
+    known=$(jq -r 'keys[]' "$cfg/plugins/known_marketplaces.json" 2>/dev/null || true)
+    while read -r name src; do
+      [[ -n $name ]] || continue
+      grep -qxF "$name" <<<"$known" || [[ -z $src ]] ||
+        claude plugin marketplace add "$src" >/dev/null || echo "cocon: could not add marketplace $name" >&2
+    done <<<"$markets"
+    for p in $enabled; do
+      grep -qxF "$p" <<<"$installed" ||
+        (cd "$repo" && claude plugin install "$p" -s user >/dev/null) || echo "cocon: could not install plugin $p (user)" >&2
+    done
   fi
-  known=$(jq -r 'keys[]' "$cfg/plugins/known_marketplaces.json" 2>/dev/null || true)
-  while read -r name src; do
-    [[ -n $name ]] || continue
-    grep -qxF "$name" <<<"$known" || [[ -z $src ]] ||
-      claude plugin marketplace add "$src" >/dev/null || echo "cocon: could not add marketplace $name" >&2
-  done <<<"$markets"
-  installed=$(jq -r '.plugins | keys[]' "$cfg/plugins/installed_plugins.json" 2>/dev/null || true)
-  for p in $enabled; do
-    grep -qxF "$p" <<<"$installed" ||
-      (cd "$repo" && claude plugin install "$p" -s "$scope" >/dev/null) || echo "cocon: could not install plugin $p ($scope)" >&2
-  done
+fi
+
+# The repo's own settings files are written by contributors and by the session itself: they install nothing here.
+# A plugin one enables that the volume lacks is named in one warning line; the names are the session's text, so
+# they go out as JSON strings, with the DEL and C1 control characters JSON leaves alone replaced.
+for file in "$repo/.claude/settings.json" "$repo/.claude/settings.local.json"; do
+  [[ -f $file ]] || continue
+  if ! missing=$(jq -r --arg installed "$installed" '(.enabledPlugins // {}) | to_entries
+      | map(select(.value and (.key | type == "string")) | .key | select(IN($installed | split("\n")[]) | not)
+        | tojson | gsub("[\u007f-\u009f]"; "?")) | join(", ")' "$file"); then
+    echo "cocon: can't read the plugins in $file; skipping it" >&2
+  elif [[ -n $missing ]]; then
+    echo "cocon: $file enables plugins this volume lacks: $missing; cocon doesn't install repo-declared plugins" \
+      "(in a session: claude plugin install <id> --scope local|project, which then stays in the volume)" >&2
+  fi
 done
 
 # Onboarding's connectivity check needs platform.claude.com, which the allowlist denies, and exits without it:

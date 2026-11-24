@@ -264,10 +264,12 @@ The launcher mounts these from `COCON_CONFIG`, whichever exist; missing ones are
 | `settings.json` | **copied over** the cocoon's settings at every start |
 | `CLAUDE.md` | **not mounted** |
 
-- At start the cocoon adds missing marketplaces and installs missing enabled plugins into the repo's config volume.
+- At start the cocoon adds the marketplaces and installs the enabled plugins your `settings.json` declares, into the repo's config volume.
 - Changes made in-session with `/config` or `/plugin` are lost at the next start.
-- Repo-only plugins: `claude plugin install <id> --scope local` (personal,
-  `.claude/settings.local.json`) or `--scope project` (shared, `.claude/settings.json`).
+- Repo-only plugins: cocon doesn't install them at start, because the repo's settings files are written by its
+  contributors and by the session. It warns about each file that enables one the volume lacks; install it in the
+  session with `claude plugin install <id> --scope local` (personal, `.claude/settings.local.json`) or
+  `--scope project` (shared, `.claude/settings.json`), and it stays in the volume.
 - Edits take effect on restart.
 
 ### Allowlist
