@@ -87,9 +87,13 @@ One fine-grained token per repository, so a session can only touch that repo.
 
    ```sh
    mkdir -p ~/.config/cocon/tokens
-   printf 'GH_TOKEN=%s\n' 'github_pat_...' > ~/.config/cocon/tokens/OWNER__REPO.env
-   chmod 600 ~/.config/cocon/tokens/OWNER__REPO.env
+   printf 'GH_TOKEN: '; IFS= read -rs tok; echo
+   (umask 077; printf 'GH_TOKEN=%s\n' "$tok" > ~/.config/cocon/tokens/OWNER__REPO.env)
+   unset tok
    ```
+
+   Paste the token at the `GH_TOKEN:` prompt. It stays off the screen and out of shell history, and the file
+   is mode 600 from the start.
 
 6. Set up [branch protection](#branch-protection). Without it a session can merge its own work. If the repo's
    Actions have secrets, set up [CI secrets](#ci-secrets) too.
