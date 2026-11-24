@@ -253,6 +253,16 @@ class HostGuard(KitCase):
                 (d / f).write_text("a\n")
         self.assertQuiet(self.files_session(d, act))
 
+    def test_files_claude_scheduler_lock_isnt_an_entry_point_but_its_durable_tasks_are(self):
+        # Claude Code's cron scheduler writes the lock in every session that schedules a task; the host never runs
+        # it. scheduled_tasks.json holds durable tasks whose prompts host Claude runs: it stays reported.
+        d = self.entry_dir()
+
+        def act():
+            for f in (".claude/scheduled_tasks.lock", ".claude/scheduled_tasks.json"):
+                (d / f).write_text("a\n")
+        self.assertPaths(self.files_session(d, act), f"{d}/.claude/scheduled_tasks.json")
+
     def test_files_no_entry_points_stays_quiet_and_so_does_an_unchanged_run(self):
         empty = self.tmp / "empty"
         empty.mkdir()

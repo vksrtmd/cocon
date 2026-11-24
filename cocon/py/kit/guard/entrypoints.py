@@ -9,7 +9,8 @@ from kit.util import c_sorted, eprint
 
 ENTRY_POINTS = (".husky", "lefthook.yml", ".lefthook.yml", "lefthook-local.yml", ".lefthook", ".pre-commit-config.yaml",
                 ".claude", ".mcp.json")
-NOT_ENTRY_POINTS = (".husky/_", ".claude/worktrees")
+# Exact paths only, each proven inert: Claude Code writes the scheduler lock in every session that schedules a task.
+NOT_ENTRY_POINTS = (".husky/_", ".claude/worktrees", ".claude/scheduled_tasks.lock")
 HEADER = "cocon: the session changed host entry points; review them before your next host git or claude:"
 
 

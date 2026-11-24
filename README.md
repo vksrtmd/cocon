@@ -367,7 +367,7 @@ The repo is writable and changes land on the host. cocon closes or reports these
     `core.hooksPath`, filters, `!` aliases, `include.path`...) or send its traffic and credentials elsewhere
     (any `http.*`, `remote.*.proxy`).
   - host entry points added, removed or changed: `.husky/`, lefthook config, `.pre-commit-config.yaml`,
-    `.claude/` (not `.claude/worktrees/`), `.mcp.json`.
+    `.claude/` (not `.claude/worktrees/` or Claude Code's `.claude/scheduled_tasks.lock`), `.mcp.json`.
 - **Host git is guarded:** the launcher and `workflow-push` run git through `host-guard git`, which refuses while
   an untrusted risky config entry is set (`--trust-git`), a worktree's pointer files disagree, or `origin`
   no longer matches the pinned repo ID (`--repin`).
