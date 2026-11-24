@@ -184,6 +184,7 @@ cocon foo --with postgres,kafka
 | Extra | Adds |
 |---|---|
 | `postgres`, `clickhouse`, `kafka` | server and client |
+| `cassandra` | `cqlsh` and a server (no auth); takes about a minute to start and ~1.5 GiB of memory |
 | `docker` | CLI and a Docker daemon sidecar (testcontainers works) |
 | `playwright` | Chromium's system libraries |
 | `go` | Go toolchain, gopls; modules in a per-repo volume |
@@ -192,7 +193,7 @@ cocon foo --with postgres,kafka
 | `rust` | rustup toolchain (fixed: rustup installs nothing), cmake, protoc, cargo-nextest; crates and builds in a per-repo volume, compiled dependencies shared by a checkout's worktrees |
 | `tauri` | WebKitGTK, librsvg, appindicator dev libraries and patchelf, for building Tauri apps; pair it with `rust` |
 
-Inside the cocoon: `postgres:5432`, `clickhouse:8123` (HTTP) / `9000`, `kafka:9092`, user and password `dev`;
+Inside the cocoon: `postgres:5432`, `clickhouse:8123` (HTTP) / `9000`, `kafka:9092`, user and password `dev`; `cassandra:9042` (`cqlsh cassandra`, no auth);
 `DOCKER_HOST=tcp://docker:2375`.
 
 ### Parallel and background sessions

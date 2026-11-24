@@ -5,11 +5,12 @@
 # Like the base build, an extras build doesn't go through the egress proxy.
 # Multi-arch: builds natively on Apple Silicon (arm64) and x86_64.
 
-ARG WITH_CLICKHOUSE=0 WITH_DOCKER=0 WITH_GO=0 WITH_HELM=0 WITH_KAFKA=0 WITH_PLAYWRIGHT=0 WITH_POSTGRES=0 \
+ARG WITH_CASSANDRA=0 WITH_CLICKHOUSE=0 WITH_DOCKER=0 WITH_GO=0 WITH_HELM=0 WITH_KAFKA=0 WITH_PLAYWRIGHT=0 WITH_POSTGRES=0 \
     WITH_PYTHON=0 WITH_RUST=0 WITH_TAURI=0
 
 FROM golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS go-src
 FROM clickhouse/clickhouse-server:26.10.3.7@sha256:739e099abd1157390960a59e4532d21781d8fde57e6e4151cb920ea02c30b1ce AS clickhouse-src
+FROM cassandra:5.0.9@sha256:5e996210152ab03e7e4af435ea853a6657954f1d6360ef1283f56cdbd8ad5020 AS cassandra-src
 FROM docker:29.9.3-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d AS docker-src
 FROM astral/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv-src
 FROM rust:1.99.1-slim-bookworm@sha256:f2c004e3d2d8b547e8cf7ffbc29205385f4e71d23e53e4e383065db5e9f822cd AS rust-src
@@ -93,9 +94,18 @@ ENV CLAUDE_CONFIG_DIR=/home/claude/.claude \
 # Each is `<name>-0` (nothing) or `<name>-1` (installs), and the stage `<name>` picks one by
 # its WITH_ arg and carries on from the previous extra.
 
+# --- cqlsh, from the server image (it brings its driver as zips; python3 is the base's)
+FROM base AS cassandra-0
+FROM base AS cassandra-1
+COPY --from=cassandra-src /opt/cassandra/bin/cqlsh /opt/cassandra/bin/cqlsh.py /usr/local/lib/cassandra/bin/
+COPY --from=cassandra-src /opt/cassandra/pylib /usr/local/lib/cassandra/pylib
+COPY --from=cassandra-src /opt/cassandra/lib/*.zip /usr/local/lib/cassandra/lib/
+RUN ln -s /usr/local/lib/cassandra/bin/cqlsh /usr/local/bin/cqlsh
+FROM cassandra-${WITH_CASSANDRA} AS cassandra
+
 # --- ClickHouse client (single binary)
-FROM base AS clickhouse-0
-FROM base AS clickhouse-1
+FROM cassandra AS clickhouse-0
+FROM cassandra AS clickhouse-1
 COPY --from=clickhouse-src /usr/bin/clickhouse /usr/local/bin/clickhouse
 RUN ln -s /usr/local/bin/clickhouse /usr/local/bin/clickhouse-client
 FROM clickhouse-${WITH_CLICKHOUSE} AS clickhouse
