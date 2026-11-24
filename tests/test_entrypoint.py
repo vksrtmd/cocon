@@ -106,7 +106,7 @@ class Entrypoint(unittest.TestCase):
         self.write(self.opt / "settings.json", '{"enabledPlugins": {"p@mkt": true},}')
         r = self.run_entry()
         self.assertEqual(self.calls(), [])
-        self.assertIn(f"can't read the plugins in {self.cfg}/settings.json; skipping it", r.stderr)
+        self.assertIn(f"can't read the plugins in {self.opt}/settings.json; skipping it", r.stderr)
 
     def test_a_repo_settings_file_that_does_not_parse_is_skipped_and_starts(self):
         self.write(self.repo / ".claude" / "settings.local.json", '{"enabledPlugins": {},}')
@@ -114,14 +114,47 @@ class Entrypoint(unittest.TestCase):
         self.assertIn(f"can't read the plugins in {self.repo}/.claude/settings.local.json; skipping it", r.stderr)
         self.assertEqual(r.stdout, "started\n")
 
+    def test_a_settings_json_the_session_left_in_the_volume_installs_nothing_without_the_hosts(self):
+        self.write(self.cfg / "settings.json", {
+            "enabledPlugins": {"p@mkt": True},
+            "extraKnownMarketplaces": {"mkt": {"source": {"source": "github", "repo": "o/r"}}}})
+        self.run_entry()
+        self.assertEqual(self.calls(), [])
+
+    def test_a_plugin_the_user_loop_just_installed_draws_no_repo_warning(self):
+        (self.cfg / "plugins").mkdir()
+        (self.tmp / "bin" / "claude").write_text(
+            '#!/bin/sh\nprintf "%s\\n" "$*" >>"$STUB_LOG"\n'
+            'printf \'{"version":2,"plugins":{"p@mkt":[{"scope":"user"}]}}\' >"$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json"\n')
+        self.write(self.opt / "settings.json", {"enabledPlugins": {"p@mkt": True}})
+        self.write(self.repo / ".claude" / "settings.json", {"enabledPlugins": {"p@mkt": True}})
+        r = self.run_entry()
+        self.assertEqual(self.calls(), ["plugin install p@mkt -s user"])
+        self.assertNotIn("repo-declared", r.stderr)
+
+    def test_a_repo_settings_file_that_does_not_parse_leaks_none_of_its_text_through_jq(self):
+        (self.repo / ".claude" / "settings.json").write_bytes(b'{"enabledPlugins": "\xc2\x9b[31mxx"}')
+        r = self.run_entry()
+        self.assertNotIn("\x9b", r.stderr)
+        self.assertIn("skipping it", r.stderr)
+
+    def test_a_plugin_name_with_bidi_or_zero_width_characters_reaches_the_terminal_replaced(self):
+        name = "a\u202eb\u200bc\u2066d@m"
+        self.write(self.repo / ".claude" / "settings.json", {"enabledPlugins": {name: True}})
+        r = self.run_entry()
+        self.assertIn("repo-declared", r.stderr)
+        for bad in ("\u202e", "\u200b", "\u2066"):
+            self.assertNotIn(bad, r.stderr)
+
     LSP = KIT / "claude" / "lsp-plugins"
 
-    def claude_args(self, *servers, installed=None):
+    def claude_args(self, *servers, installed=None, scope="user"):
         for s in servers:
             self.stub(s)
         if installed:
             (self.cfg / "plugins").mkdir(exist_ok=True)
-            self.write(self.cfg / "plugins" / "installed_plugins.json", {"plugins": {k: [{}] for k in installed}})
+            self.write(self.cfg / "plugins" / "installed_plugins.json",
+                       {"version": 2, "plugins": {k: [{"scope": scope, "installPath": "/x"}] for k in installed}})
         self.run_entry("claude", "-p", "hi")
         (line,) = self.calls()
         return line
@@ -143,6 +176,14 @@ class Entrypoint(unittest.TestCase):
         self.stage_lsp()
         line = self.claude_args("gopls", "pyright-langserver", installed=["gopls-lsp@claude-plugins-official"])
         self.assertEqual(self.dirs(line), [f"{self.opt}/lsp-plugins/pyright-lsp"])
+
+    def test_claude_still_loads_an_lsp_plugin_the_volume_has_installed_at_local_scope_only(self):
+        self.stage_lsp()
+        line = self.claude_args("gopls", installed=["gopls-lsp@claude-plugins-official"], scope="local")
+        self.assertEqual(self.dirs(line), [f"{self.opt}/lsp-plugins/gopls-lsp"])
+
+    def test_claude_gets_tmp_as_a_working_directory(self):
+        self.assertIn(" --add-dir /tmp ", f" {self.claude_args()} ")
 
     def test_another_command_gets_no_plugin_dir(self):
         self.stage_lsp()

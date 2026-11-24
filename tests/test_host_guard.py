@@ -269,6 +269,20 @@ class HostGuard(KitCase):
         self.assertQuiet(self.files_session(empty, lambda: None))
         self.assertQuiet(self.files_session(self.entry_dir(), lambda: None))
 
+    def test_files_a_scheduler_lock_that_is_a_symlink_is_reported(self):
+        d, outside = self.entry_dir(), self.tmp / "outside"
+        outside.write_text("a\n")
+        self.assertPaths(self.files_session(d, lambda: (d / ".claude/scheduled_tasks.lock").symlink_to(outside)),
+                         f"{d}/.claude/scheduled_tasks.lock")
+
+    def test_files_a_scheduler_lock_that_is_a_directory_is_reported_with_its_contents(self):
+        d = self.entry_dir()
+
+        def act():
+            (d / ".claude/scheduled_tasks.lock").mkdir()
+            (d / ".claude/scheduled_tasks.lock/x").write_text("a\n")
+        self.assertPaths(self.files_session(d, act), f"{d}/.claude/scheduled_tasks.lock/x")
+
     def test_files_a_symlink_counts_by_its_target_path_not_its_content(self):
         d, outside = self.entry_dir(), self.tmp / "outside"
         outside.write_text("a\n")

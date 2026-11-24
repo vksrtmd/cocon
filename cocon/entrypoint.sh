@@ -31,12 +31,20 @@ if [[ -f /opt/cocon/settings.json ]]; then
 fi
 
 # Plugins as code, user scope only: add the marketplaces and install the enabled plugins this volume lacks, from
-# the user's settings.json above (the kit-controlled file), with a fixed scope and path: nothing the session writes
-# decides what is installed. Only does network work on a fresh volume or after the file gains one.
+# the user's settings.json as mounted (the kit-controlled file; the volume's copy is the session's to write, so
+# without the mount nothing installs), with a fixed scope and path: nothing the session writes decides what is
+# installed. Only does network work on a fresh volume or after the file gains one.
 cfg=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
 repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-installed=$(jq -r '.plugins | keys[]' "$cfg/plugins/installed_plugins.json" 2>/dev/null || true)
-file=$cfg/settings.json
+# installed: every plugin the volume has; user_installed: those with a user-scope install. Read again after the
+# installs, which change them.
+read_installed() {
+  installed=$(jq -r '.plugins | keys[]' "$cfg/plugins/installed_plugins.json" 2>/dev/null || true)
+  user_installed=$(jq -r '.plugins | to_entries[] | select(any(.value[]; .scope == "user")) | .key' \
+    "$cfg/plugins/installed_plugins.json" 2>/dev/null || true)
+}
+read_installed
+file=/opt/cocon/settings.json
 if [[ -f $file ]]; then
   if ! markets=$(jq -r '.extraKnownMarketplaces // {} | to_entries[] |
       "\(.key) \(.value.source.repo // .value.source.url // "")"' "$file") ||
@@ -51,19 +59,20 @@ if [[ -f $file ]]; then
     done <<<"$markets"
     for p in $enabled; do
       grep -qxF "$p" <<<"$installed" ||
-        (cd "$repo" && claude plugin install "$p" -s user >/dev/null) || echo "cocon: could not install plugin $p (user)" >&2
+        claude plugin install "$p" -s user >/dev/null || echo "cocon: could not install plugin $p (user)" >&2
     done
   fi
 fi
 
+read_installed
 # The repo's own settings files are written by contributors and by the session itself: they install nothing here.
 # A plugin one enables that the volume lacks is named in one warning line; the names are the session's text, so
-# they go out as JSON strings, with the DEL and C1 control characters JSON leaves alone replaced.
+# they go out as JSON strings, with the DEL and C1 control characters JSON leaves alone, and zero-width and bidi characters, replaced.
 for file in "$repo/.claude/settings.json" "$repo/.claude/settings.local.json"; do
   [[ -f $file ]] || continue
   if ! missing=$(jq -r --arg installed "$installed" '(.enabledPlugins // {}) | to_entries
-      | map(select(.value and (.key | type == "string")) | .key | select(IN($installed | split("\n")[]) | not)
-        | tojson | gsub("[\u007f-\u009f]"; "?")) | join(", ")' "$file"); then
+      | map(select(.value) | .key | select(IN($installed | split("\n")[]) | not)
+        | tojson | gsub("[\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]"; "?")) | join(", ")' "$file" 2>/dev/null); then
     echo "cocon: can't read the plugins in $file; skipping it" >&2
   elif [[ -n $missing ]]; then
     echo "cocon: $file enables plugins this volume lacks: $missing; cocon doesn't install repo-declared plugins" \
@@ -89,9 +98,8 @@ fi
 # Inject container notes into Claude's system prompt when launching claude.
 if [[ "${1:-}" == "claude" ]]; then
   shift
-  # The vendored LSP plugins (image-owned) whose server is on PATH, unless the volume has the plugin installed.
+  # The vendored LSP plugins (image-owned) whose server is on PATH, unless the volume has it installed at user scope (a local or project install is for one worktree).
   plugin_dirs=()
-  installed=$(jq -r '.plugins | keys[]' "$cfg/plugins/installed_plugins.json" 2>/dev/null || true)
   for dir in /opt/cocon/lsp-plugins/*/; do
     dir=${dir%/}
     [[ -f $dir/.claude-plugin/plugin.json ]] || continue
@@ -103,10 +111,12 @@ if [[ "${1:-}" == "claude" ]]; then
       command -v "$cmd" >/dev/null || ok=0
     done <<<"$server"
     [[ $ok == 1 ]] || continue
-    ! grep -q "^$plugin@" <<<"$installed" || continue
+    ! grep -q "^$plugin@" <<<"$user_installed" || continue
     plugin_dirs+=(--plugin-dir "$dir")
   done
-  exec claude "${plugin_dirs[@]}" --append-system-prompt "$(cat /opt/cocon/container-notes.md)" "$@"
+  # ${arr[@]+...}: bash < 4.4 under set -u fails on an empty array. /tmp is the container's own scratch (Claude Code's
+  # background task outputs live there), so reads from it need no prompt.
+  exec claude ${plugin_dirs[@]+"${plugin_dirs[@]}"} --add-dir /tmp --append-system-prompt "$(cat /opt/cocon/container-notes.md)" "$@"
 fi
 
 exec "$@"

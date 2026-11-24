@@ -9,8 +9,10 @@ from kit.util import c_sorted, eprint
 
 ENTRY_POINTS = (".husky", "lefthook.yml", ".lefthook.yml", "lefthook-local.yml", ".lefthook", ".pre-commit-config.yaml",
                 ".claude", ".mcp.json")
-# Exact paths only, each proven inert: Claude Code writes the scheduler lock in every session that schedules a task.
-NOT_ENTRY_POINTS = (".husky/_", ".claude/worktrees", ".claude/scheduled_tasks.lock")
+# Exact paths only, each proven inert. Claude Code writes the scheduler lock in every session that schedules a task;
+# it is inert as a regular file only, so it is exempt only while lstat says so (a symlink or directory there is not).
+NOT_ENTRY_POINTS = (".husky/_", ".claude/worktrees")
+REGULAR_FILE_ONLY = (".claude/scheduled_tasks.lock",)
 HEADER = "cocon: the session changed host entry points; review them before your next host git or claude:"
 
 
@@ -36,6 +38,8 @@ def _digest(d, top, lines):
             continue
         path = f"{d}/{rel}"
         st = os.lstat(path)
+        if rel in REGULAR_FILE_ONLY and stat.S_ISREG(st.st_mode):
+            continue
         if stat.S_ISLNK(st.st_mode):
             lines.append(f"{hashlib.sha1(os.fsencode(os.readlink(path))).hexdigest()}  {rel}")
         elif stat.S_ISREG(st.st_mode):
