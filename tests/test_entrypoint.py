@@ -19,7 +19,7 @@ class Entrypoint(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        self.tmp = Path(self._tmp.name)
+        self.tmp = Path(os.path.realpath(self._tmp.name))  # macOS: /var -> /private/var, which git prints
         self.opt = self.tmp / "opt"
         self.cfg = self.tmp / "home" / ".claude"
         self.repo = self.tmp / "repo"
